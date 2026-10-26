@@ -1,0 +1,19 @@
+---
+// A number drawn as red seven-segment LED digits (inline SVG), for the approvals scoreboard (#13).
+interface Props { value: number; digits?: number }
+const { value, digits = 2 } = Astro.props;
+const LIT: Record<string, string> = { 0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg", 4: "bcfg", 5: "acdfg", 6: "acdefg", 7: "abc", 8: "abcdefg", 9: "abcdfg" };
+const SEG: Record<string, string> = {
+  a: "14,8 46,8 50,12 46,16 14,16 10,12", g: "14,46 46,46 50,50 46,54 14,54 10,50", d: "14,84 46,84 50,88 46,92 14,92 10,88",
+  f: "6,16 10,12 14,16 14,46 10,50 6,46", b: "46,16 50,12 54,16 54,46 50,50 46,46",
+  e: "6,54 10,50 14,54 14,84 10,88 6,84", c: "46,54 50,50 54,54 54,84 50,88 46,84",
+};
+const text = String(Math.max(0, Math.min(10 ** digits - 1, Math.round(value)))).padStart(digits, "0");
+---
+<span class="seg" aria-hidden="true">
+  {[...text].map((ch) => (
+    <svg viewBox="0 0 60 100" width="60" height="100">
+      {Object.entries(SEG).map(([k, pts]) => <polygon points={pts} class={LIT[ch].includes(k) ? "on" : ""} />)}
+    </svg>
+  ))}
+</span>

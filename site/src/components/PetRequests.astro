@@ -1,0 +1,34 @@
+---
+// Masco-pet "New avatar?" requests waiting for the commissioner. Shown on /lm and /pet-desk.
+// Requests are hidden notes (never in the public feed); "Done" tags them avatar_done.
+import { query } from "../lib/db";
+
+const rows = await query(`SELECT n.id, n.body, n.created_at, t.team_name, lower(t.abv) AS abv
+                          FROM notes n JOIN teams t ON t.team_id = n.author_team_id
+                          WHERE 'avatar_request' = ANY(n.tags) AND NOT 'avatar_done' = ANY(n.tags)
+                          ORDER BY n.created_at`).catch(() => []);
+---
+<section class="card" id="pet-requests">
+  <h2>🎨 Masco-pet avatar requests ({rows.length})</h2>
+  {rows.length === 0 && <p class="muted">No requests right now.</p>}
+  {rows.length > 0 && (
+    <ul class="feed">
+      {rows.map((r) => (
+        <li><span><b>{r.team_name}</b>:
+            {/^https?:\/\//i.test(r.body)
+              ? <a href={r.body} target="_blank" rel="noopener noreferrer nofollow"><img src={r.body} alt="Requested avatar" loading="lazy" referrerpolicy="no-referrer" style="max-height:64px;vertical-align:middle;border-radius:6px" /> open image</a>
+              : r.body}
+            <span class="muted small">(cut it with gigapet/tools/cut_sprite.py into <code>/pet/sprites/{r.abv}.png</code>)</span></span>
+          <span class="ts">{new Date(r.created_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} ·
+            <button type="button" data-avatar-done={r.id}>Done</button></span></li>
+      ))}
+    </ul>
+  )}
+</section>
+<script is:inline>
+  document.querySelectorAll("#pet-requests [data-avatar-done]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      try { await BL.post("/api/pet", { op: "avatar_done", note_id: b.dataset.avatarDone }); b.closest("li").remove(); BL.toast("Marked done."); }
+      catch (e) { BL.toast(e.message, true); }
+    }));
+</script>

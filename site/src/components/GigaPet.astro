@@ -1,0 +1,16 @@
+---
+// Masco-Pets: the team pet that sits top-right on every page.
+// Mounted once in Base.astro inside .head-tools. Game logic is in /pet/pet.js,
+// mini-games in /pet/pet-games.js, tuning knobs (and the on/off switch) in /pet/config.js.
+import { query } from "../lib/db";
+
+const teams = await query<{ team_id: string; abv: string; team_name: string }>(
+  "SELECT team_id, abv, team_name FROM teams WHERE active ORDER BY team_name");
+const data = JSON.stringify(teams.map((t) => ({ id: String(t.team_id), abv: (t.abv || "").toLowerCase(), name: t.team_name })));
+---
+<div class="gp-slot" id="gp-slot" data-teams={data} hidden></div>
+<link rel="stylesheet" href="/pet/pet.css">
+<script is:inline src="/pet/config.js"></script>
+<script is:inline src="/pet/pet.js" defer></script>
+<script is:inline src="/pet/trivia.js" defer></script>
+<script is:inline src="/pet/pet-games.js" defer></script>

@@ -1,0 +1,78 @@
+---
+// Practice auction draft vs the computer. Untimed, runs in the browser, saves nothing to the database.
+import Base from "../layouts/Base.astro";
+import { query } from "../lib/db";
+import { ESPN } from "../lib/espn";
+import { TIER_EMOJI } from "../lib/tiers";
+
+const ESPN_DRAFT = ESPN.draft;
+
+const [teams, pool, settings] = await Promise.all([
+  query(`SELECT team_id, team_name FROM teams WHERE active ORDER BY team_name`),
+  query(`SELECT p.player_id AS id, p.name, p.nba_team AS team, p.positions AS pos, ct.rank, ct.tier,
+                p.auction_value::float AS espn_value
+         FROM current_tiers ct JOIN players p USING (player_id)
+         ORDER BY ct.rank LIMIT 200`),
+  query(`SELECT setting_key, setting_value FROM league_settings
+         WHERE setting_key IN ('draft_budget', 'starter_slots', 'center_max', 'max_teams')`),
+]);
+const s = Object.fromEntries(settings.map((r) => [r.setting_key, r.setting_value]));
+const data = {
+  teams, pool, emoji: TIER_EMOJI,
+  budget: Number(s.draft_budget || 500),
+  slots: (s.starter_slots || "PG,SG,SF,PF,C,UTIL,UTIL,UTIL").split(","),
+  centerMax: Number(s.center_max || 4),
+};
+const sizes = Array.from({ length: Math.max(Number(s.max_teams || 7), teams.length) - 1 }, (_, i) => i + 2).filter((n) => n >= Math.min(teams.length, 6));
+---
+<Base title="Practice draft" active="/practice-draft">
+  <section class="card">
+    <h2>Practice auction draft</h2>
+    <p class="muted small">
+      Just for practice: nothing here touches the real league. You get ${data.budget} and {data.slots.length} roster spots
+      ({data.slots.join(", ")}), and the computer runs the other teams (the league has {teams.length} now and room for {s.max_teams || 7}; pick either size). Teams take turns putting a player
+      up for bids. The computer puts up one of the top 5 players left, at random. There's no clock, so take your time.
+      Values are ESPN's, scaled to ${data.budget} budgets.
+    </p>
+    <p class="small"><a href={ESPN_DRAFT} target="_blank" rel="noopener">Open the real ESPN draft room ↗</a> · <a href={ESPN.mockDraft} target="_blank" rel="noopener">ESPN mock drafts ↗</a></p>
+    {pool.length === 0 && <p>The practice draft needs the tier list, which shows up once the LM freezes the first tier snapshot.</p>}
+    {pool.length > 0 && (
+      <div class="row">
+        <label class="ctl">Teams
+          <select id="dr-size">{sizes.map((n) => <option value={n} selected={n === teams.length}>{n}{n === teams.length ? " (league now)" : ""}</option>)}</select>
+        </label>
+        <button class="primary" type="button" id="dr-new">Start a new practice draft</button>
+        <button type="button" id="dr-auto" hidden>Finish the draft for me</button>
+      </div>
+    )}
+    <p class="small" id="dr-status" aria-live="polite"></p>
+  </section>
+
+  {pool.length > 0 && (
+    <>
+      <section class="card" id="dr-lot" hidden>
+        <h2 id="dr-lot-title">On the block</h2>
+        <div id="dr-lot-body"></div>
+      </section>
+
+      <div class="grid">
+        <section class="card" id="dr-avail-card" hidden>
+          <h2>Players left</h2>
+          <input type="search" id="dr-search" placeholder="Find a player" aria-label="Find a player">
+          <ol class="tiers" id="dr-avail"></ol>
+        </section>
+        <section class="card" id="dr-teams-card" hidden>
+          <h2>Teams</h2>
+          <div class="stack" id="dr-teams"></div>
+        </section>
+      </div>
+
+      <section class="card" id="dr-log-card" hidden>
+        <h2>Sold</h2>
+        <ul class="feed" id="dr-log"></ul>
+      </section>
+    </>
+  )}
+  <script is:inline type="application/json" id="draft-data" set:html={JSON.stringify(data).replace(/</g, "\\u003c")}></script>
+  <script is:inline src="/draft.js"></script>
+</Base>

@@ -1,0 +1,177 @@
+---
+// Player card: tier, owner, stats for an ESPN window, the scoring formula with his numbers,
+// his total, and the points standings 2 above and 2 below him. ?model= and ?split= switch views.
+import Base from "../../layouts/Base.astro";
+import { query } from "../../lib/db";
+import { ESPN } from "../../lib/espn";
+import { TIER_EMOJI, TIER_NAME } from "../../lib/tiers";
+import {
+  HEAT, HEAT_NAME, MODEL_NAME, SPLITS, SPLIT_NAME, avatarSrc, asSplit, formula, leagueModel, playerRow, pointsNeighbours,
+} from "../../lib/players";
+
+const id = Astro.params.id ?? "";
+const split = asSplit(Astro.url.searchParams.get("split"));
+const league = await leagueModel();
+const asked = Astro.url.searchParams.get("model") ?? "";
+const model = MODEL_NAME[asked] ? asked : league;
+
+const [p, weights, around] = await Promise.all([
+  playerRow(id, split),
+  query<{ stat: string; points: number }>(
+    `SELECT stat, points::float AS points FROM scoring_models WHERE model_key = $1 ORDER BY points DESC, stat`, [model]),
+  pointsNeighbours(id, split, model),
+]);
+if (!p) return new Response("Player not found", { status: 404 });
+
+const t: Record<string, number> = p.t ?? {};
+const gp = Number(p.gp) || 0;
+const { lines, total } = formula(t, weights);
+const stored = p.fp?.[model] != null ? Number(p.fp[model]) : null;
+const me = around.find((r) => r.me);
+const tier = (p.tier ?? "T3") as "T1" | "T2" | "T3";
+const PATCH = { T1: "/img/ui/tier-t1.webp", T2: "/img/ui/tier-t2.webp", T3: "/img/ui/tier-t3.webp" };
+const pg = (k: string) => (gp ? (Number(t[k] ?? 0) / gp).toFixed(1) : "–");
+const pct = (m: string, a: string) => (Number(t[a]) ? `${((100 * Number(t[m] ?? 0)) / Number(t[a])).toFixed(1)}%` : "–");
+const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+const sign = (n: number) => (n > 0 ? `+${fmt(n)}` : fmt(n));
+const hurt = p.status && !/^active$/i.test(p.status);
+const box: [string, string][] = [
+  ["PTS", pg("pts")], ["REB", pg("reb")], ["AST", pg("ast")], ["STL", pg("stl")], ["BLK", pg("blk")],
+  ["3PM", pg("tpm")], ["FG%", pct("fgm", "fga")], ["FT%", pct("ftm", "fta")], ["TO", pg("tov")], ["MIN", pg("min")],
+];
+const d = p.def;
+const defBox: [string, string][] = d ? [
+  ["Deflections", (d.defl / d.g).toFixed(1)], ["Contests", (d.cont / d.g).toFixed(1)], ["Charges", (d.chg / d.g).toFixed(2)],
+  ["Box-outs", (d.box / d.g).toFixed(1)], ["Loose balls", (d.loose / d.g).toFixed(1)],
+  ["Defended FG%", d.dfg != null ? `${d.dfg}%` : "–"], ["Rim FG%", d.rim != null ? `${d.rim}%` : "–"],
+] : [];
+const moveText = (now: number, before?: number | null) =>
+  before == null ? "new this run" : before === now ? "no change" : before > now ? `+${before - now} from #${before}` : `-${now - before} from #${before}`;
+const tierMove = p.prev_tier && p.prev_tier !== tier ? (p.prev_tier > tier ? "Moved up a tier" : "Dropped a tier") : null;
+const q = (m: string, s: string) => `?model=${m}&split=${s}`;
+---
+<Base title={p.name} active="/tiers">
+  <p class="small"><a href="/tiers">← Back to the tier list</a></p>
+
+  <article class={`pcard pcard-${tier.toLowerCase()}`}>
+    <div class="pcard-top">
+      <div class="pcard-name">
+        <h1>{p.name}</h1>
+        <p class="muted">{p.nba ?? "Free agent"} · {(p.pos || []).join(" / ") || "–"}
+          {hurt && <> · <span class="pill bad" title={p.injury ?? ""}>{p.status.replace(/_/g, " ")}{p.injury ? ` (${p.injury})` : ""}</span></>}</p>
+      </div>
+      <div class="pcard-tier">
+        <img src={PATCH[tier]} alt={TIER_NAME[tier]} width="96" height="96">
+        <span><b class="tier-emoji">{TIER_EMOJI[tier]}</b> Tier rank {p.tier_rank ?? "–"}</span>
+        {p.tier_prev_rank != null && p.tier_rank != null && p.tier_prev_rank !== p.tier_rank &&
+          <span class="small">{moveText(p.tier_rank, p.tier_prev_rank)}</span>}
+        {tierMove && <span class={`pill ${p.prev_tier > tier ? "ok" : "warn"}`}>{tierMove}</span>}
+      </div>
+    </div>
+
+    <div class="pcard-owner">
+      {p.team_name ? (
+        <>
+          {avatarSrc(p.abv) && <img src={avatarSrc(p.abv)} alt="" width="48" height="48">}
+          <span>On <b>{p.team_name}</b>{p.slot === "IR" ? " · IR" : ""}</span>
+        </>
+      ) : <span>Free agent · <a href={ESPN.players} target="_blank" rel="noopener">add him in ESPN ↗</a></span>}
+      {p.value != null && <span class="muted small">ESPN auction value ${Math.round(p.value)}</span>}
+    </div>
+
+    <form class="row pcard-ctl" method="get">
+      <label class="ctl">Scoring
+        <select name="model" onchange="this.form.submit()">
+          {Object.entries(MODEL_NAME).map(([k, name]) => <option value={k} selected={k === model}>{name}{k === league ? " (league)" : ""}</option>)}
+        </select>
+      </label>
+      <label class="ctl">Stats from
+        <select name="split" onchange="this.form.submit()">
+          {SPLITS.map((s) => <option value={s} selected={s === split}>{SPLIT_NAME[s]}</option>)}
+        </select>
+      </label>
+      <noscript><button>Show</button></noscript>
+    </form>
+
+    <section class="pcard-total">
+      <div class="big num">{stored ?? total}</div>
+      <div><b>{MODEL_NAME[model]} points</b> · {SPLIT_NAME[split].toLowerCase()}<br>
+        <span class="muted small">{gp} {gp === 1 ? "game" : "games"}{gp ? ` · ${(Number(stored ?? total) / gp).toFixed(1)} a game` : ""}
+          {me && <> · #{me.place} of {me.of} in league points</>}</span></div>
+    </section>
+
+    <section class="pcard-box" aria-label="Per game">
+      {box.map(([k, v]) => <div><span class="muted small">{k}</span><b class="num">{v}</b></div>)}
+    </section>
+    <p class="muted small">Per game. {gp === 0 && "No games in this window yet."}</p>
+  </article>
+
+  <div class="grid">
+    <section class="card">
+      <h2>How he scores</h2>
+      {lines.length === 0 && <p class="muted">No stats in this window yet, so there's nothing to add up.</p>}
+      {lines.length > 0 && (
+        <table class="formula">
+          <thead><tr><th>Stat</th><th class="num">Count</th><th class="num">× Pts</th><th class="num">= Pts</th></tr></thead>
+          <tbody>
+            {lines.map((l) => (
+              <tr class={l.subtotal < 0 ? "neg" : ""}>
+                <td>{l.label}{["dd", "td", "qd"].includes(l.stat) && <span class="muted small"> games</span>}</td>
+                <td class="num">{fmt(l.count)}</td><td class="num">{sign(l.points)}</td><td class="num">{sign(l.subtotal)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot><tr><th colspan="3">Total</th><th class="num">{fmt(total)}</th></tr></tfoot>
+        </table>
+      )}
+      <p class="muted small">Bonuses don't stack: a triple-double game pays the triple-double bonus only.{" "}
+        {model === league && p.espn != null && split !== "projected" && <> ESPN's own total for this window is {fmt(p.espn)}.</>}{" "}
+        <a href="/rules">Scoring rules</a></p>
+    </section>
+
+    <section class="card">
+      <h2>Points standings</h2>
+      {!me && <p class="muted">He has no games in this window yet, so he isn't in the points standings.</p>}
+      {me && (
+        <>
+          <p class="muted small">{MODEL_NAME[model]} points, {SPLIT_NAME[split].toLowerCase()}, all players. The two just above and below him.</p>
+          <ol class="neighbours">
+            {around.map((r) => {
+              const gap = Math.round((r.points - me.points) * 10) / 10;
+              return (
+                <li class={r.me ? "me" : ""}>
+                  <span class="num place">#{r.place}</span>
+                  <span>{r.me ? <b>{r.name}</b> : <a href={`/player/${encodeURIComponent(r.player_id)}${q(model, split)}`}>{r.name}</a>}
+                    <span class="muted small"> {r.nba_team ?? ""}</span></span>
+                  <span class="num">{fmt(r.points)}</span>
+                  <span class="num small gap">{r.me ? "" : gap > 0 ? `${fmt(gap)} ahead` : gap < 0 ? `${fmt(-gap)} behind` : "tied"}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      )}
+    </section>
+
+    <section class="card">
+      <h2>Power rankings</h2>
+      <div class="heat-chips">
+        {HEAT.map((k) => (
+          <div class={p.heat?.[k] != null && p.heat[k] <= 25 ? "hot" : ""}>
+            <span class="muted small">{HEAT_NAME[k]}</span>
+            <b class="num">{p.heat?.[k] != null ? `#${p.heat[k]}` : "–"}</b>
+            {p.heat?.[k] != null && <span class="small">{moveText(p.heat[k], p.heat_prev?.[k])}{p.heat_score?.[k] != null ? ` · score ${Number(p.heat_score[k]).toFixed(2)}` : ""}{p.heat_dscore?.[k] != null ? ` (${Number(p.heat_dscore[k]) > 0 ? "+" : ""}${Number(p.heat_dscore[k]).toFixed(2)})` : ""}</span>}
+          </div>
+        ))}
+      </div>
+      {!p.heat && <p class="muted small">Not in the latest top 100, or the rankings haven't been published yet.</p>}
+      <p class="small"><a href="/tiers#how">How the rankings work</a></p>
+      {defBox.length > 0 && (
+        <>
+          <h3>Defense per game <span class="muted small">(NBA.com, {d.g} games)</span></h3>
+          <div class="pcard-box">{defBox.map(([k, v]) => <div><span class="muted small">{k}</span><b class="num">{v}</b></div>)}</div>
+        </>
+      )}
+    </section>
+  </div>
+</Base>

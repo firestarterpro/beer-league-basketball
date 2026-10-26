@@ -1,0 +1,107 @@
+---
+// Shared page frame: header, nav, team picker. Every page uses it.
+import { query } from "../lib/db";
+import { SHORTCUTS } from "../lib/espn";
+import GigaPet from "../components/GigaPet.astro";
+import EspnCard from "../components/EspnCard.astro";
+import { THEMES, themeFor, themeName } from "../lib/themes";
+
+// sides: the page lays out its own side columns (Home; Tiers adds its own ESPN column). Every other page gets an ESPN column.
+// fonts: extra Google Fonts a page's toys use (css2 query, e.g. "family=VT323").
+interface Props { title: string; active?: string; sides?: boolean; fonts?: string }
+const { title, active = "", sides = false, fonts: pageFonts = "" } = Astro.props;
+// Every page has its own theme; a visitor's pick in the theme bar (bl.theme on their device) wins over it.
+const pageTheme = themeFor(Astro.url.pathname);
+const themeFonts = Object.fromEntries(THEMES.map((t) => [t.key, t.fonts]));
+const teams = await query<{ team_id: string; team_name: string; espn_team_id: number | null }>(
+  "SELECT team_id, team_name, espn_team_id FROM teams WHERE active ORDER BY team_name");
+const nav = [
+  ["/", "Home"], ["/tiers", "Tiers"], ["/practice-draft", "Practice draft"], ["/rules", "Rules"], ["/polls", "Polls"], ["/approvals", "Approvals"],
+  ["/actions", "Action requests"], ["/dashboards", "Dashboards"],
+];
+---
+<!doctype html>
+<html lang="en" data-theme={pageTheme}>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title} · Beer League Basketball</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+  {pageFonts && <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?${pageFonts}&display=swap`}>}
+  <script is:inline define:vars={{ pageTheme, themeFonts }}>
+    // Before anything paints: switch to this visitor's saved theme and load its fonts.
+    let theme = pageTheme;
+    try {
+      const saved = localStorage.getItem("bl.theme");
+      if (saved && saved !== "page" && saved in themeFonts) theme = saved;
+    } catch {}
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.pageTheme = pageTheme;
+    window.BL_THEME_FONTS = themeFonts;
+    if (themeFonts[theme]) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet"; link.id = "theme-fonts";
+      link.href = `https://fonts.googleapis.com/css2?${themeFonts[theme]}&display=swap`;
+      document.head.appendChild(link);
+    }
+  </script>
+  <link rel="stylesheet" href="/site.css">
+  <link rel="stylesheet" href="/themes.css">
+  <link rel="stylesheet" href="/toys.css">
+  <script is:inline src="/team.js"></script>
+  <script is:inline src="/toys.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="wrap head">
+      <nav class="nav-btns" id="site-nav" aria-label="Site">
+        {nav.map(([href, label]) => <a href={href} aria-current={active === href ? "page" : undefined}>{label}</a>)}
+      </nav>
+      <div class="head-tools">
+        <div class="head-pickers">
+          <label class="picker">
+            <span>My team</span>
+            <select id="team-picker">
+              <option value="">Pick your team</option>
+              {teams.map((t) => <option value={t.team_id} data-espn={t.espn_team_id ?? ""}>{t.team_name}</option>)}
+            </select>
+          </label>
+          {/* Each page has its own theme; a pick here wins on every page (saved on this device). */}
+          <label class="picker theme-pick">
+            <span>Theme</span>
+            <select id="theme-picker">
+              <option value="page">Page's own ({themeName(pageTheme)})</option>
+              {THEMES.map((t) => <option value={t.key}>{t.emoji} {t.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <div class="sync" id="sync" hidden>
+          <button type="button" id="sync-now">Sync</button>
+          <span id="sync-status"></span>
+        </div>
+        <button type="button" class="sound-btn" id="sound-toggle" aria-pressed="true" aria-label="Sound effects">🔊</button>
+        <GigaPet />
+      </div>
+    </div>
+    <div class="ticker" id="ticker" hidden aria-label="Today's NBA scores"></div>
+  </header>
+  <main class="wrap">
+    {sides
+      ? <slot />
+      : <div class="page-grid">
+          <div class="page-main"><slot /></div>
+          <aside class="page-side" aria-label="Fantasy Shortcuts"><EspnCard /></aside>
+        </div>}
+  </main>
+  <footer class="wrap muted small">
+    <nav class="espn-links" aria-label="Fantasy Shortcuts">
+      <b>Fantasy Shortcuts ↗</b>
+      {SHORTCUTS.map(([label, href, team]) => <a href={href} target="_blank" rel="noopener" data-espn={team ? "team" : undefined}>{label}</a>)}
+    </nav>
+    <p>ESPN runs the league. This site is for tiers, votes and fun. Votes are voluntary.</p>
+    <p class="row"><button type="button" class="link" id="slime-toggle" hidden>Gutter slime: on</button></p>
+  </footer>
+</body>
+</html>

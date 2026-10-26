@@ -1,0 +1,15 @@
+{
+  // Cloudflare Workers config. DATABASE_URL and LM_PASSCODE are secrets:
+  //   local:  put them in .dev.vars (git-ignored)
+  //   deploy: npx wrangler secret put DATABASE_URL   /   npx wrangler secret put LM_PASSCODE
+  // LM_PASSCODE locks /lm, /pet-desk and the commissioner actions (src/lib/lm-auth.ts).
+  "name": "beer-league",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Sync Now button state. No id needed: wrangler creates the namespace on the first deploy.
+  "kv_namespaces": [{ "binding": "SYNC" }],
+  "vars": {
+    // Paste the Looker Studio "Embed report" URL here once the report exists.
+    "LOOKER_REPORT_URL": ""
+  }
+}

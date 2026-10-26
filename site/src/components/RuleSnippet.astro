@@ -1,0 +1,13 @@
+---
+// A small league-info callout for the Home page: an icon, a title, a one- or
+// two-line summary (the slot), and a button to the full details elsewhere on the site.
+// Placed next to the part of Home it relates to (tiers card, votes card, etc.).
+interface Props { title: string; href: string; icon?: string; cta?: string }
+const { title, href, icon, cta = "Full details" } = Astro.props;
+const external = href.startsWith("http");
+---
+<aside class="rule-snippet">
+  <div class="rs-head">{icon && <span class="rs-ic" aria-hidden="true">{icon}</span>}<b>{title}</b></div>
+  <p class="small"><slot /></p>
+  <a class="rs-btn" href={href} {...external ? { target: "_blank", rel: "noopener" } : {}}>{cta} {external ? "↗" : "→"}</a>
+</aside>

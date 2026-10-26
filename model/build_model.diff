@@ -1,0 +1,90 @@
+diff --git "a/..\\beer-league-sample\\build_model.py" "b/model\\build_model.py"
+index 9be6301..f616e1c 100644
+--- "a/..\\beer-league-sample\\build_model.py"
++++ "b/model\\build_model.py"
+@@ -1,4 +1,11 @@
+-"""Power-ranking model for the 2025-26 sample, built exactly to the coordinator brief (steps 1-7)."""
++"""Power-ranking model for the draft-day tiers. Copy of beer-league-sample/build_model.py (steps 1-7 unchanged).
++
++Window (from pull_draft.py): each team's 2026-27 preseason games first (newest), then 2025-26 regular-season
++games, skipping each team's last 5 regular-season games; play-in and playoffs never included. 20 games per team.
++Preseason games without hustle / defensive / tracking box scores still count: they are scored on boosted
++Game Score, and their missing defense stats are left out of the defense averages (as the sample already did
++for any missing source). Reads model/data/, writes the 4 ranking CSVs to model/out_draft/.
++"""
+ import os
+ import re
+ import sys
+@@ -9,9 +16,12 @@ import numpy as np
+ import pandas as pd
+ 
+ sys.stdout.reconfigure(encoding="utf-8")
+-OUT = Path(__file__).resolve().parent
++HERE = Path(__file__).resolve().parent
++IN = HERE / "data"
++OUT = HERE / "out_draft"
++OUT.mkdir(exist_ok=True)
+ # Minutes Power: a block counts only with this many qualifying minutes (default 30; 0 = no minimum).
+-# With a minimum, Minutes outputs get a suffix (e.g. _min30) and power_rankings_sample.xlsx is left alone.
++# With a minimum, Minutes outputs get a suffix (e.g. _min30).
+ BLOCK_MIN = float(os.environ.get("BLOCK_MIN_MINUTES", 30))
+ SUFFIX = f"_min{BLOCK_MIN:g}" if BLOCK_MIN else ""
+ ID = {"GAME_ID": str, "gameId": str}
+@@ -29,7 +39,7 @@ notes = []
+ 
+ 
+ def read(name):
+-    return pd.read_csv(OUT / name, dtype=ID, low_memory=False)
++    return pd.read_csv(IN / name, dtype=ID, low_memory=False)
+ 
+ 
+ def norm(s):
+@@ -55,8 +65,8 @@ sel["slot_w"] = 10 - (sel.RECENCY_RANK - 1) % 5
+ sel["block_w"] = sel.block.map(BLOCK_W)
+ 
+ trad = read("boxscoretraditionalv3_PlayerStats.csv")
+-pg = trad.merge(sel[["GAME_ID", "TEAM_ID", "TEAM_ABBREVIATION", "GAME_DATE", "WL", "RECENCY_RANK", "block",
+-                     "slot_w", "block_w"]],
++pg = trad.merge(sel[["GAME_ID", "TEAM_ID", "TEAM_ABBREVIATION", "GAME_DATE", "WL", "SEASON_TYPE", "RECENCY_RANK",
++                     "block", "slot_w", "block_w"]],
+                 left_on=["GAME_ID", "teamId"], right_on=["GAME_ID", "TEAM_ID"], how="inner")
+ pg = pg.rename(columns=BOX_COLS)
+ pg["MIN"] = pg.minutes.map(parse_min)
+@@ -230,7 +240,7 @@ pg = pg.merge(hus, on=["GAME_ID", "personId"], how="left")
+ pg = pg.merge(dfn[["GAME_ID", "personId", "fgSaved"]], on=["GAME_ID", "personId"], how="left")
+ pg = pg.merge(trk[["GAME_ID", "personId", "rimSaved"]], on=["GAME_ID", "personId"], how="left")
+ q = pg[pg.qual].copy()
+-missing_def = {c: int(q[c].isna().sum()) for c in DEF}
++missing_def = {st: {c: int(g[c].isna().sum()) for c in DEF} for st, g in q.groupby("SEASON_TYPE")}
+ 
+ 
+ # ---------- STEP 5/6 helpers ----------
+@@ -314,11 +324,7 @@ for k in ("Minutes NBA", "Minutes Fantasy"):
+         ranks[k]["counted_block_minutes"] = pid.map(ok.groupby("personId")["min"].sum()).round(1)
+ print("Minutes Power eligible players (>=1 counted block):", mn[mn["min"] >= BLOCK_MIN].personId.nunique())
+ 
+-# Weekly outputs never take the suffix; with a minimum, the suffixed workbook holds only the Minutes sheets
+-xl = ranks if not SUFFIX else {k: v for k, v in ranks.items() if k.startswith("Minutes")}
+-with pd.ExcelWriter(OUT / f"power_rankings_sample{SUFFIX}.xlsx") as xw:
+-    for k, df in xl.items():
+-        df.round(3).to_excel(xw, sheet_name=k, index=False)
++# Weekly outputs never take the suffix. (No xlsx: the CSVs are what publish_rankings.py reads.)
+ for k, df in ranks.items():
+     sfx = SUFFIX if k.startswith("Minutes") else ""
+     df.round(3).to_csv(OUT / f"ranking_{k.lower().replace(' ', '_')}{sfx}.csv", index=False)
+@@ -327,8 +333,14 @@ pg.to_csv(OUT / "player_games_scored.csv", index=False)
+ 
+ # ---------- report ----------
+ pd.set_option("display.width", 200)
++per_team = sel.groupby("TEAM_ID").size()
++print(f"games per team: min={per_team.min()} max={per_team.max()}; preseason team-games="
++      f"{int((sel.SEASON_TYPE == 'Preseason').sum())} (unique preseason games="
++      f"{sel[sel.SEASON_TYPE == 'Preseason'].GAME_ID.nunique()}); teams={len(per_team)}")
++print("games with a box score:", pg.groupby("SEASON_TYPE").GAME_ID.nunique().to_dict())
+ for k, df in ranks.items():
+-    print(f"\n### {k} top 25\n" + df.head(25)[["rank", "player", "team", "score"]].round(2).to_string(index=False))
++    n = 50 if k == "Weekly NBA" else 25
++    print(f"\n### {k} top {n}\n" + df.head(n)[["rank", "player", "team", "score"]].round(2).to_string(index=False))
+ print("\n### PBP match rates\n" + match.round(4).to_string(index=False))
+ print(f"\nlgFG={lgFG:.4f} lgRim={lgRim:.4f}")
+ print("weekly z-pool per block:", wk_pools, " minutes z-pool per block:", mn_pools)

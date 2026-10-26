@@ -1,0 +1,54 @@
+---
+// "How league points work": what each scoring model rewards, plus one worked stat line
+// run through all three models with the same formula the site uses.
+import { query } from "../lib/db";
+import { MODEL_NAME, formula, leagueModel } from "../lib/players";
+
+interface Props { open?: boolean }
+const { open = false } = Astro.props;
+const [weights, league] = await Promise.all([
+  query<{ model_key: string; stat: string; points: number }>(
+    `SELECT model_key, stat, points::float AS points FROM scoring_models ORDER BY model_key, points DESC, stat`),
+  leagueModel(),
+]);
+const byModel: Record<string, { stat: string; points: number }[]> = {};
+for (const w of weights) (byModel[w.model_key] ||= []).push(w);
+// One ordinary good night: 24 points, 10 boards (a double-double), 6 assists, in a win.
+const line = { pts: 24, fgm: 9, fga: 18, ftm: 4, fta: 5, tpm: 2, tpa: 6, oreb: 2, dreb: 8, ast: 6, stl: 2, blk: 1, tov: 3, pf: 2, team_win: 1, dd: 1 };
+const results = Object.keys(byModel).sort((a, b) => Number(b === league) - Number(a === league))
+  .map((k) => ({ key: k, ...formula(line, byModel[k]) }));
+// Plain-English summary of each model (Doc 3). The exact values come from scoring_models below.
+const WHAT: Record<string, string> = {
+  hustle: "Pays big for the hard stuff: a steal is +7 and a block +9, more than a made basket. 2 per point, +4 per assist, +5 for a team win, and every attempt, turnover and foul costs you. Efficient two-way players rise; volume chuckers sink.",
+  espn_default: "ESPN's standard points league: 1 per point and per rebound, +2 per made basket and −1 per attempt (so a miss costs 1), +2 assists, +4 steals and blocks, −2 turnovers. No bonuses, fouls or team wins. Scorers and big-minute players lead.",
+  balanced: "In between: 1.5 per point and per rebound, +3 assists, +5 steals, +6 blocks, smaller miss and foul penalties, +3 double-double, +5 triple-double. No team-win points.",
+};
+---
+<details class="explain" id="how-scoring" open={open}>
+  <summary>How league points are scored</summary>
+  <div class="stack">
+    <p>Every stat a player records is multiplied by its points value and added up. That's his fantasy score for the game,
+      and a team's score is the sum of its starters'. The league has three scoring models; the league poll (Q13) picks one.
+      Until then ESPN runs <b>{MODEL_NAME[league]}</b>, and the site uses it by default. Every table and card can switch models so you can compare.</p>
+    <p>Bonuses don't stack: a triple-double game earns only the triple-double bonus, not the double-double too.
+      "3-pointers missed" means 3-point attempts minus makes.</p>
+    <div class="grid">
+      {results.map((r) => (
+        <div class={`model${r.key === league ? " mine" : ""}`}>
+          <h3>{MODEL_NAME[r.key] ?? r.key}{r.key === league ? " (league)" : ""}</h3>
+          <p class="small">{WHAT[r.key] ?? ""}</p>
+          <p class="small"><b>Example:</b> 24 pts (9/18 FG, 2/6 3PT, 4/5 FT), 10 reb (2 off), 6 ast, 2 stl, 1 blk, 3 TO, 2 fouls, a win ={" "}
+            <b class="num">{r.total} points</b>.</p>
+          <details class="small">
+            <summary>Show the math</summary>
+            <table class="formula">
+              <tbody>{r.lines.map((l) => <tr class={l.subtotal < 0 ? "neg" : ""}><td>{l.label}</td><td class="num">{l.count} × {l.points}</td><td class="num">{l.subtotal}</td></tr>)}</tbody>
+              <tfoot><tr><th colspan="2">Total</th><th class="num">{r.total}</th></tr></tfoot>
+            </table>
+          </details>
+        </div>
+      ))}
+    </div>
+    <p class="small">Full point values are on the <a href="/rules#scoring">Rules page</a>. Tap any player for his own formula with his real numbers.</p>
+  </div>
+</details>

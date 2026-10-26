@@ -1,0 +1,55 @@
+---
+// "How the tiers and power rankings work": which ranking sets the tiers, how each of
+// Jason's four power rankings is built from the box score and NBA.com defense, and why.
+import { TIER_EMOJI } from "../lib/tiers";
+import { HEAT_NAME, MODEL_NAME, TIER_SOURCE_NAME, leagueModel, tierInfo } from "../lib/players";
+
+interface Props { open?: boolean }
+const { open = false } = Astro.props;
+const [info, league] = await Promise.all([tierInfo(), leagueModel()]);
+const snap = info.snapshot;
+const fmtDate = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { dateStyle: "medium" });
+const builtFrom = snap ? TIER_SOURCE_NAME[snap.source] ?? snap.source : null;
+const chosen = info.ranking ? TIER_SOURCE_NAME[info.ranking] ?? info.ranking : null;
+---
+<details class="explain" id="how" open={open}>
+  <summary>How the tiers and power rankings work</summary>
+  <div class="stack">
+    <h3>The tier list</h3>
+    <p>Tiers are set by the commissioner's power ranking{chosen ? <>: <b>{chosen}</b></> : " (which of the four is being picked now)"}.
+      Ranks 1–{info.t1} are {TIER_EMOJI.T1} Tier 1 and ranks {info.t1 + 1}–{info.t2} are {TIER_EMOJI.T2} Tier 2: a team can roster at most
+      {" "}{info.cap1} of each. Everyone else is {TIER_EMOJI.T3} Tier 3, no limit. Players on IR don't count.
+      The list is frozen as a numbered snapshot and refreshed every {info.weeks} weeks, so tiers don't jump around between refreshes.</p>
+    {snap && (
+      <p class="small muted">Current snapshot: version {snap.version}, in effect since {fmtDate(snap.effective_date)}, built from {builtFrom}
+        {snap.run_date ? <> (the {fmtDate(snap.run_date)} run)</> : ""}.
+        {snap.source === "espn" && " The first power-ranking snapshot replaces it once the model has run on this season's games."}</p>
+    )}
+    <p>Caps are checked only when someone adds a free agent or brings a player back from IR. Going over because of the draft,
+      a trade or a tier refresh is legal: that's a ⚡ Power Play. A free-agent add or IR return that breaks the caps goes to a community vote.</p>
+
+    <h3>Weekly Power (NBA model)</h3>
+    <ul>
+      <li><b>Blocks of 5 games.</b> Each NBA team's schedule is cut into blocks of 5 games. Inside a block the newest game counts 10, then 9, 8, 7, 6.
+        Blocks count 21 for the newest, then 20, 19, 18 and so on, never below 16. Recent form matters most, but a hot week can't erase a season.</li>
+      <li><b>Game Score</b> is the box-score base (John Hollinger's formula): PTS + 0.4·FGM − 0.7·FGA − 0.4·(FTA − FTM) + 0.7·OREB + 0.3·DREB + STL + 0.7·AST + 0.7·BLK − 0.4·PF − TOV.</li>
+      <li><b>Defense fantasy can't see.</b> Seven NBA.com tracking stats: deflections, contested shots, charges drawn, box-outs, loose balls,
+        and defended FG% and rim FG% (counted as points saved against the league average, so a defender who faced one shot can't game it).
+        Each is compared to every player with 3+ games in the block (a z-score), the seven are averaged, and one standard deviation is worth 2 Game Score points.</li>
+      <li><b>Close games count more.</b> Box-score plays made with the score within 3 get +5%, within 4–6 +3%, within 7–9 +1%. That cuts both ways: a clutch turnover costs more.</li>
+      <li>A DNP or a game under 6 minutes takes its slot but isn't averaged in. A block with no real games is skipped.</li>
+    </ul>
+    <h3>Minutes Power (NBA model)</h3>
+    <p>The same ingredients per 48 minutes, from each block's totals. A block counts only if the player logged 30+ real minutes in it, so
+      matchup and bench players who produce in short minutes get ranked too. Defense is compared on per-48 rates.</p>
+    <h3>Fantasy-scoring versions</h3>
+    <p>{HEAT_NAME.weekly_fantasy} and {HEAT_NAME.minutes_fantasy} use the same blocks, weights and close-game boost, but swap Game Score for
+      league fantasy points ({MODEL_NAME[league]} now, including the team-win bonus) and leave the defense numbers out. They answer "who's scoring
+      the most fantasy points lately", while the NBA versions answer "who's actually playing the best".</p>
+    <h3>League points</h3>
+    <p>Plain season fantasy points under the scoring model you pick. They're totals, so they reward games played and health as well as quality.</p>
+    <h3>Movement</h3>
+    <p>+/- shows how many places a player moved (+3 = up three places, -2 = down two) since the last run of that ranking (or the last tier snapshot), and the score change
+      shows how much his power score rose or fell. NEW means he wasn't in the previous list. Each power ranking keeps its top 100.</p>
+  </div>
+</details>

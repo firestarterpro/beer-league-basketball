@@ -1,0 +1,24 @@
+---
+// Home-page wall of every team's masco-pet, from the league save (pets table).
+// Hidden unless the pet is switched on (config.js) or previewed with ?pet=on.
+// Needs GigaPet (in Base.astro) on the page for pet.css and config.js.
+import { one, query } from "../lib/db";
+
+// Until migration 011 runs on Neon the pet tables don't exist; skip the wall rather than break Home.
+const [rows, settings] = await Promise.all([
+  query(`SELECT lower(t.abv) AS abv, t.team_name, p.power, p.fire_until, p.super_until,
+                coalesce((p.state->>'egg')::boolean, false) AS egg,
+                p.state->>'wk' AS wk, coalesce((p.state->>'wkPts')::float, 0) AS wk_pts,
+                coalesce((p.state->>'points')::float, 0) AS points, (p.state->>'bornAt')::float AS born_at,
+                coalesce((p.state->'lastBonus'->>'pts')::int, 0) AS last_bonus, p.state->'lastBonus'->>'id' AS bonus_wk
+         FROM teams t LEFT JOIN pets p USING (team_id) WHERE t.active ORDER BY t.team_name`),
+  one(`SELECT overrides FROM pet_settings WHERE id = 1`),
+]).catch(() => [[], undefined] as const);
+const data = JSON.stringify({ rows, overrides: settings?.overrides ?? {} });
+---
+<section class="card" id="gp-wall-card" hidden>
+  <h2>Masco-Pets</h2>
+  <p class="muted small">Every team's masco-pet. Tap one to visit and play (practice only, nothing saves). 🔥 On Fire · 🌟 Super Saiyan · both = Superman fire mode · 🏀/w = average points per week (each week the top scorer gets +25 bonus, last +10). Rings around the pet screen show how close it is to 🔥 and 🌟.</p>
+  <div class="gp-wall" id="gp-wall" data-pets={data}></div>
+</section>
+<script is:inline src="/pet/pet-wall.js" defer></script>

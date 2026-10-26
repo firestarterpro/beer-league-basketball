@@ -1,0 +1,204 @@
+---
+// League Manager desk. Unlisted page, no login (family league).
+import Base from "../layouts/Base.astro";
+import { query } from "../lib/db";
+import { TIER_EMOJI } from "../lib/tiers";
+import PetRequests from "../components/PetRequests.astro";
+
+const [queue, votes, polls, changes, teams, irPlayers, notes] = await Promise.all([
+  query(`SELECT r.id, r.action_type, r.payload, r.submitted_at, t.team_name,
+                (SELECT name FROM players WHERE player_id = r.payload->>'player_id') AS player_name,
+                (SELECT name FROM players WHERE player_id = r.payload->>'drop_player_id') AS drop_name
+         FROM action_requests r JOIN teams t USING (team_id)
+         WHERE r.status = 'pending' ORDER BY r.submitted_at`),
+  query(`SELECT p.id AS poll_id, p.question, p.context_type, p.context_id, poll_is_open(p.id) AS open,
+                v.yes_votes, v.threshold, coalesce(c.status, i.status) AS status
+         FROM polls p JOIN claim_vote_tally v ON v.poll_id = p.id
+         LEFT JOIN restricted_fa_claims c ON c.id = p.context_id
+         LEFT JOIN ir_activations i ON i.id = p.context_id
+         WHERE coalesce(c.status, i.status) IN ('pending', 'failed', 'approved') AND p.created_at > now() - interval '30 days'
+         ORDER BY p.created_at DESC`),
+  query(`SELECT id, question, type, (SELECT count(*) FROM poll_responses r WHERE r.poll_id = p.id)::int AS ballots
+         FROM polls p WHERE context_type IN ('generic', 'scrub_nominee') AND poll_is_open(id) ORDER BY created_at DESC`),
+  query(`SELECT n.id, n.body, n.tags, n.created_at FROM notes n
+         WHERE 'team_change_request' = ANY(n.tags) AND n.created_at > now() - interval '14 days'
+           AND NOT EXISTS (SELECT 1 FROM notes a WHERE 'team_change_approved' = ANY(a.tags)
+                           AND a.created_at > n.created_at
+                           AND (SELECT x FROM unnest(n.tags) x WHERE x LIKE 'device:%') = ANY(a.tags))
+         ORDER BY n.created_at DESC`),
+  query(`SELECT team_id, team_name, abv, gm_name, manager_assigned, uses_web_actions FROM teams WHERE active ORDER BY team_name`),
+  query(`SELECT r.team_id, r.player_id, r.player_name, r.tier FROM roster_tiers r WHERE r.slot = 'IR' ORDER BY r.player_name`),
+  query(`SELECT id, body, created_at FROM notes WHERE visible ORDER BY created_at DESC LIMIT 15`),
+]);
+// League (Central) time: the Worker itself runs on UTC.
+const CT: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short", timeZone: "America/Chicago" };
+const tag = (tags: string[], prefix: string) => tags.find((t) => t.startsWith(prefix))?.slice(prefix.length) ?? "";
+const LABEL: Record<string, string> = { add_player: "Add", drop_player: "Drop", waiver_claim: "Waiver claim", lineup_change: "Lineup", ir_move: "IR move" };
+const describe = (r: any) => {
+  const p = r.payload;
+  if (r.action_type === "waiver_claim") return `claim ${r.player_name ?? p.player_id}, drop ${r.drop_name ?? p.drop_player_id}`;
+  if (r.action_type === "lineup_change") return `${r.player_name ?? p.player_id} to ${p.slot} on ${p.date}`;
+  if (r.action_type === "ir_move") return `${r.player_name ?? p.player_id}: ${p.from_slot} → ${p.to_slot}`;
+  return r.player_name ?? p.player_id;
+};
+---
+<Base title="LM desk">
+  <h1>LM desk</h1>
+  <p class="muted small">Everything here posts to the league feed where it matters. Keep this link to yourself.</p>
+
+  <section class="card">
+    <h2>Action queue ({queue.length})</h2>
+    {queue.length === 0 && <p class="muted">No pending requests.</p>}
+    {queue.map((r) => (
+      <form class="stack" data-op="process_action" style="border-top:1px solid var(--line);padding-top:10px">
+        <input type="hidden" name="request_id" value={r.id} />
+        <p><strong>{r.team_name}</strong>: {LABEL[r.action_type]} {describe(r)} <span class="ts">· {new Date(r.submitted_at).toLocaleString("en-US", CT)} CT</span></p>
+        <div class="row">
+          <input name="notes" placeholder="Note (needed to reject)" aria-label="LM note" />
+          <button type="submit" name="executed" value="true" class="primary">Done in ESPN</button>
+          <button type="submit" name="executed" value="false">Reject</button>
+        </div>
+      </form>
+    ))}
+  </section>
+
+  <PetRequests />
+
+  <section class="card">
+    <h2>Approval votes</h2>
+    {votes.length === 0 && <p class="muted">No recent claims or IR activations.</p>}
+    {votes.map((v) => (
+      <div class="stack" style="border-top:1px solid var(--line);padding-top:10px">
+        <p><strong>{v.question}</strong> <span class="num">{v.yes_votes}/{v.threshold} Yes</span> · {v.status}</p>
+        <div class="row">
+          {v.open && <button data-op="close_poll" data-poll_id={v.poll_id}>Close vote (after ESPN processes)</button>}
+        </div>
+        <form class="row" data-op="override">
+          <input type="hidden" name="context_type" value={v.context_type} />
+          <input type="hidden" name="context_id" value={v.context_id} />
+          <input name="reason" placeholder="Override reason" aria-label="Override reason" required />
+          <button type="submit" name="approve" value="true">Override: approve</button>
+          <button type="submit" name="approve" value="false">Override: deny</button>
+        </form>
+      </div>
+    ))}
+  </section>
+
+  <div class="grid">
+    <form class="card stack" data-op="create_claim">
+      <h2>Enter a restricted-FA claim</h2>
+      <p class="small muted">From ESPN chat. Opens a Yes/No vote; the requester gets an automatic Yes.</p>
+      <select name="team_id" aria-label="Team">{teams.map((t) => <option value={t.team_id}>{t.team_name}</option>)}</select>
+      <input name="player_name" list="lm-players" data-player="player_id" placeholder="Player" autocomplete="off" aria-label="Player" />
+      <input type="hidden" name="player_id" />
+      <button class="primary" type="submit">Open vote</button>
+    </form>
+
+    <form class="card stack" data-op="create_ir">
+      <h2>Enter an IR activation</h2>
+      <p class="small muted">Within caps = social confirmation. Over caps = majority vote.</p>
+      <select name="player_id" aria-label="Player on IR" data-team-from="team_id">
+        {irPlayers.length === 0 && <option value="">Nobody is on IR</option>}
+        {irPlayers.map((p) => <option value={p.player_id} data-team={p.team_id}>{p.player_name} ({TIER_EMOJI[p.tier]})</option>)}
+      </select>
+      <input type="hidden" name="team_id" value={irPlayers[0]?.team_id ?? ""} />
+      <input type="hidden" name="to_slot" value="active" />
+      <button class="primary" type="submit">Post activation</button>
+    </form>
+
+    <form class="card stack" data-op="create_poll">
+      <h2>New poll</h2>
+      <input name="question" placeholder="Question" required aria-label="Question" />
+      <select name="type" aria-label="Poll type">
+        <option value="single_choice">Pick one</option><option value="multi_select">Pick any</option>
+        <option value="ranked">Rank them</option><option value="rating">Rate 1–5</option><option value="text">Short answer</option>
+      </select>
+      <textarea name="options" placeholder="Options, one per line (not needed for rating or short answer)" aria-label="Options"></textarea>
+      <input name="description" placeholder="Details (optional)" aria-label="Details" />
+      <label class="small">Closes (optional) <input type="datetime-local" name="closes_at" /></label>
+      <button class="primary" type="submit">Post poll</button>
+    </form>
+
+    <div class="card stack">
+      <h2>Scrub of the Week</h2>
+      <p class="small muted">Starts a poll with up to 10 free agents who are 🚶 Tier 3 now but made the top 20 of the power ranking at least once in the last 30 days.</p>
+      <button class="primary" data-op="scrub_poll">Start this week's poll</button>
+    </div>
+
+    <form class="card stack" data-op="post_note">
+      <h2>Announcement</h2>
+      <textarea name="body" required aria-label="Announcement"></textarea>
+      <button class="primary" type="submit">Post to feed</button>
+    </form>
+  </div>
+
+  <section class="card">
+    <h2>Open polls</h2>
+    {polls.length === 0 && <p class="muted">None.</p>}
+    {polls.map((p) => (
+      <div class="row" style="justify-content:space-between">
+        <span>{p.question} <span class="muted small">· {p.ballots} ballots</span></span>
+        <button data-op="close_poll" data-poll_id={p.id}>Close</button>
+      </div>
+    ))}
+  </section>
+
+  <section class="card">
+    <h2>Voting-team change requests</h2>
+    {changes.length === 0 && <p class="muted">None.</p>}
+    {changes.map((c) => (
+      <div class="row" style="justify-content:space-between">
+        <span>{c.body} <span class="ts">· {new Date(c.created_at).toLocaleString("en-US", CT)} CT</span></span>
+        <button data-op="approve_team_change" data-device={tag(c.tags, "device:")} data-to={tag(c.tags, "to:")}>Approve</button>
+      </div>
+    ))}
+  </section>
+
+  <section class="card">
+    <h2>Teams</h2>
+    <p class="small muted">Team name, abbreviation (match ESPN's, e.g. FLAG; it also picks the team's art) and GM name or nickname.
+      "Has a GM" counts toward the vote threshold. "Web requests" turns on the action queue for that GM.</p>
+    <form class="stack" id="team-editor">
+      <div class="team-rows stack" id="team-rows">
+        {teams.map((t) => (
+          <div class="row team-row" data-team-id={t.team_id}>
+            <input name="team_name" value={t.team_name} aria-label="Team name" required />
+            <input name="abv" value={t.abv ?? ""} aria-label="Abbreviation" placeholder="ABV" maxlength="4" size="5" required />
+            <input name="gm_name" value={t.gm_name ?? ""} placeholder="GM name or nickname" aria-label="GM name or nickname" />
+            <label class="small"><input type="checkbox" name="manager_assigned" checked={t.manager_assigned} /> Has a GM</label>
+            <label class="small"><input type="checkbox" name="uses_web_actions" checked={t.uses_web_actions} /> Web requests</label>
+          </div>
+        ))}
+      </div>
+      <template id="team-row-new">
+        <div class="row team-row" data-team-id="">
+          <input name="team_name" placeholder="New team name" aria-label="Team name" required />
+          <input name="abv" placeholder="ABV" aria-label="Abbreviation" maxlength="4" size="5" required />
+          <input name="gm_name" placeholder="GM name or nickname" aria-label="GM name or nickname" />
+          <label class="small"><input type="checkbox" name="manager_assigned" /> Has a GM</label>
+          <label class="small"><input type="checkbox" name="uses_web_actions" /> Web requests</label>
+          <button type="button" class="link" data-remove-row>Remove</button>
+        </div>
+      </template>
+      <div class="row">
+        <button type="button" id="team-add">＋ Add a team</button>
+        <button type="submit" class="primary">Save all teams</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Recent feed</h2>
+    <ul class="feed">
+      {notes.map((n) => (
+        <li class="row" style="justify-content:space-between">
+          <span>{n.body}</span>
+          <button data-op="hide_note" data-note_id={n.id}>Hide</button>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <datalist id="lm-players"></datalist>
+  <script is:inline src="/lm.js"></script>
+</Base>

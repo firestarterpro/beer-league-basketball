@@ -1,0 +1,71 @@
+---
+import Base from "../layouts/Base.astro";
+import { setting } from "../lib/db";
+
+const report = setting("LOOKER_REPORT_URL");
+---
+<Base title="Dashboards" active="/dashboards">
+  <h1>Dashboards</h1>
+  {/* XP window (#18): drag it by the title bar on a computer, minimize it to the taskbar, or maximize it. */}
+  <section class="xp-win" id="xp-win" aria-label="League dashboards window">
+    <div class="xp-bar" id="xp-bar">
+      <span class="xp-ico" aria-hidden="true">📊</span>
+      <span class="xp-name">fantasy_basketball.exe</span>
+      <span class="xp-ctl">
+        <button type="button" id="xp-min" aria-label="Minimize">_</button>
+        <button type="button" id="xp-max" aria-label="Maximize" aria-pressed="false">□</button>
+      </span>
+    </div>
+    <div class="xp-body">
+      {report
+        ? <iframe class="looker" src={report} title="League dashboards" allowfullscreen sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+        : <div class="card muted empty" data-emoji="🪟">The Looker Studio report isn't connected yet. The LM adds its embed link in the site settings.</div>}
+    </div>
+  </section>
+  <div class="xp-taskbar" id="xp-taskbar" hidden>
+    <span class="xp-start" aria-hidden="true">start</span>
+    <button type="button" class="xp-task" id="xp-task">📊 fantasy_basketball.exe</button>
+    <span class="xp-clock num" id="xp-clock"></span>
+  </div>
+  <script is:inline>
+    (function () {
+      const win = document.getElementById("xp-win"), bar = document.getElementById("xp-bar"), task = document.getElementById("xp-taskbar");
+      const maxBtn = document.getElementById("xp-max");
+      const sfx = (n) => window.BL && BL.sfx && BL.sfx(n);
+      let x = 0, y = 0;
+      const place = () => (win.style.transform = x || y ? `translate(${x}px, ${y}px)` : "");
+      const maximize = (on) => {
+        win.classList.toggle("max", on); maxBtn.setAttribute("aria-pressed", String(on));
+        maxBtn.setAttribute("aria-label", on ? "Restore" : "Maximize"); maxBtn.textContent = on ? "❐" : "□";
+        document.documentElement.classList.toggle("xp-locked", on);
+        if (on) win.style.transform = ""; else place();
+        sfx("xp-ding");
+      };
+      document.getElementById("xp-min").addEventListener("click", () => {
+        win.hidden = true; task.hidden = false; sfx("xp-ding");
+        document.getElementById("xp-clock").textContent = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        if (win.classList.contains("max")) maximize(false);
+        document.getElementById("xp-task").focus();
+      });
+      document.getElementById("xp-task").addEventListener("click", () => { win.hidden = false; task.hidden = true; sfx("xp-ding"); });
+      maxBtn.addEventListener("click", () => maximize(!win.classList.contains("max")));
+      bar.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) maximize(!win.classList.contains("max")); });
+      addEventListener("keydown", (e) => { if (e.key === "Escape" && win.classList.contains("max")) maximize(false); });
+      // Drag by the title bar (mouse only; on phones the window stays put).
+      let start = null;
+      bar.addEventListener("pointerdown", (e) => {
+        if (e.pointerType !== "mouse" || e.button !== 0 || e.target.closest("button") || win.classList.contains("max") || innerWidth < 900) return;
+        start = { px: e.clientX, py: e.clientY, x, y };
+        bar.setPointerCapture(e.pointerId); win.classList.add("dragging");
+      });
+      bar.addEventListener("pointermove", (e) => {
+        if (!start) return;
+        x = start.x + e.clientX - start.px; y = Math.max(-win.offsetTop + 8, start.y + e.clientY - start.py);
+        place();
+      });
+      const stop = () => { start = null; win.classList.remove("dragging"); };
+      bar.addEventListener("pointerup", stop);
+      bar.addEventListener("pointercancel", stop);
+    })();
+  </script>
+</Base>

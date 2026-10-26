@@ -1,0 +1,98 @@
+---
+// Masco-Pet desk: the commissioner's knobs for the masco-pets. Unlisted page, no login (family league).
+import Base from "../layouts/Base.astro";
+import PetRequests from "../components/PetRequests.astro";
+import { one, query } from "../lib/db";
+
+const [teams, pets, gifts, settings] = await Promise.all([
+  query(`SELECT team_id, team_name FROM teams WHERE active ORDER BY team_name`),
+  query(`SELECT t.team_id, t.team_name, p.power, p.fire_until, p.super_until, p.acted_at, p.push_kind
+         FROM teams t LEFT JOIN pets p USING (team_id) WHERE t.active ORDER BY t.team_name`),
+  query(`SELECT g.id, g.title, g.fx, g.expires_at, t.team_name FROM pet_gifts g LEFT JOIN teams t USING (team_id)
+         WHERE g.expires_at > now() ORDER BY g.created_at DESC`),
+  one(`SELECT overrides FROM pet_settings WHERE id = 1`),
+]);
+const fmt = (d: string | null) => (d ? new Date(d).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "–");
+const live = (d: string | null) => !!d && new Date(d) > new Date();
+// [path in config, label, step]
+const knobs: [string, string, string][] = [
+  ["maxPower", "Max level (🤾 Dunking)", "1"],
+  ["powerBoost", "Dunking boost (× every Dunking gain)", "0.1"],
+  ["tokens.daily", "Tokens refilled each day", "1"],
+  ["tokens.max", "Max tokens", "1"],
+  ["tokens.floor", "Out of tokens: top back up to", "1"],
+  ["tokens.freeCooldownMin", "Free token every (minutes, 0 = any time)", "1"],
+  ["decayPerHour.hunger", "⛹️ Agility lost per hour", "0.5"],
+  ["decayPerHour.happy", "🥷 Poise lost per hour", "0.5"],
+  ["decayPerHour.energy", "👋 Shooting lost per hour", "0.5"],
+  ["trivia.need", "Right answers for On Fire", "1"],
+  ["trivia.fireHours", "On Fire lasts (hours)", "1"],
+  ["trivia.windowHours", "…within this many hours", "1"],
+  ["trivia.perLevel", "Trivia: right answers per level-up", "1"],
+  ["trivia.maxMisses", "Trivia: misses before back to level 1", "1"],
+  ["pong.pointsPerToken", "Gravity Pong points per token", "1"],
+  ["weekly.top", "Weekly bonus: most 🏀 points gets", "1"],
+  ["weekly.bottom", "Weekly bonus: fewest 🏀 points gets", "1"],
+  ["roulette.freePerDay", "Free wheel spins per day", "1"],
+  ["roulette.cost", "Wheel spin cost (0 = unlimited free)", "1"],
+  ["drops.everyMin", "Mystery box about every (minutes)", "5"],
+];
+const fx: [string, string][] = [["tokens", "🪙 Tokens"], ["points", "🏀 Points"], ["power", "🤾 Dunking"], ["energy", "👋 Shooting"], ["hunger", "⛹️ Agility"],
+  ["happy", "🥷 Poise"], ["fireHours", "🔥 On Fire (hours)"], ["superHours", "🌟 Super Saiyan (hours)"], ["spins", "🎟️ Free spins"]];
+---
+<Base title="Masco-Pet desk">
+  <section class="card">
+    <h1>Masco-Pet desk</h1>
+    <p class="muted">Masco-pet controls for the commissioner. Changes reach everyone within a couple of minutes, with no deploy.
+      The on/off switch itself lives in <code>public/pet/config.js</code>.</p>
+  </section>
+
+  <PetRequests />
+
+  <section class="card">
+    <h2>Give a power-up</h2>
+    <form id="gift-form" class="stack">
+      <div class="row">
+        <label>To <select name="team_id"><option value="">Everyone</option>{teams.map((t) => <option value={t.team_id}>{t.team_name}</option>)}</select></label>
+        <label>Name <input name="title" required maxlength="80" placeholder="Opening night bonus!"></label>
+        <label>Lasts <input name="days" type="number" min="1" max="90" value="14" style="width:5em"> days to claim</label>
+      </div>
+      <div class="row">{fx.map(([k, label]) => <label>{label} <input name={k} type="number" step="1" style="width:5em"></label>)}</div>
+      <div class="row"><button class="primary">Send gift</button><button type="button" id="random-gift">🎲 Random power-up for everyone</button></div>
+    </form>
+    {gifts.length > 0 && (
+      <ul class="feed">
+        {gifts.map((g) => (
+          <li><span><b>{g.title}</b> → {g.team_name ?? "Everyone"} · <code>{JSON.stringify(g.fx)}</code></span>
+            <span class="ts">Claimable until {fmt(g.expires_at)} · <button type="button" data-end-gift={g.id}>End now</button></span></li>
+        ))}
+      </ul>
+    )}
+  </section>
+
+  <section class="card">
+    <h2>Tuning</h2>
+    <p class="muted small">Blank = use the default from config.js (shown greyed out). Raise Power boost or lower Max level to help everyone reach Super Saiyan.</p>
+    <form id="tune-form" class="grid" data-overrides={JSON.stringify(settings?.overrides ?? {})}>
+      {knobs.map(([path, label, step]) => <label class="stack" style="gap:4px"><span class="small">{label}</span><input name={path} type="number" step={step} min="0"></label>)}
+      <div class="row"><button class="primary">Save tuning</button><button type="button" id="tune-clear">Back to defaults</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>League masco-pets</h2>
+    <div class="tablebox"><table>
+      <thead><tr><th>Team</th><th>Power</th><th>Effects</th><th>Last change</th><th></th></tr></thead>
+      <tbody>
+        {pets.map((p) => (
+          <tr><td>{p.team_name}</td><td class="num">{p.power == null ? "–" : Math.round(Number(p.power))}</td>
+            <td>{live(p.fire_until) ? "🔥 " : ""}{live(p.super_until) ? "🌟" : ""}</td>
+            <td class="small">{fmt(p.acted_at)}{p.push_kind ? ` (${p.push_kind})` : ""}</td>
+            <td>{p.acted_at && <button type="button" data-reset={p.team_id} data-name={p.team_name}>🥚 Rehatch</button>}</td></tr>
+        ))}
+      </tbody>
+    </table></div>
+    <p class="muted small">Rehatch sends that team's masco-pet back to an egg on every device (at their next sync).</p>
+  </section>
+  <script is:inline src="/pet/pet-desk.js"></script>
+</Base>

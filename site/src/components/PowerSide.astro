@@ -1,0 +1,60 @@
+---
+// One of the power-ranking side columns that sit beside Home.
+// left: ESPN buttons, Per-minute power, player spotlight. right: Per-week power, New to the top 50.
+import EspnCard from "./EspnCard.astro";
+import HeatList from "./HeatList.astro";
+import { TIER_EMOJI } from "../lib/tiers";
+import { HEAT_NAME, heatTop, newToTop50, spotlight } from "../lib/players";
+
+interface Props { side: "left" | "right" }
+const { side } = Astro.props;
+const [perMin, star] = side === "left" ? await Promise.all([heatTop("minutes_nba", 25), spotlight()]) : [[], null];
+const [perWeek, arrivals] = side === "right" ? await Promise.all([heatTop("weekly_nba", 25), newToTop50()]) : [[], []];
+---
+{side === "left" ? (
+  <aside class="home-side home-left" aria-label="Fantasy Shortcuts, Minutes Power and player spotlight">
+    <EspnCard />
+    <HeatList title="Per-minute power" view="minutes_nba" rows={perMin}
+      blurb={`${HEAT_NAME.minutes_nba}: production per 48 minutes, 30+ minutes per block. Top 25.`} />
+    {star && (
+      <section class="card spotlight">
+        <h2>Player spotlight</h2>
+        <p class="sp-name"><a href={`/player/${star.id}`}>{star.name}</a></p>
+        <p class="muted small">{star.nba ?? ""}{star.pos?.length ? ` · ${star.pos.join("/")}` : ""} · tier rank {star.rank} {TIER_EMOJI[star.tier as keyof typeof TIER_EMOJI]}</p>
+        {star.gp > 0
+          ? <p class="small num">{star.pts} pts · {star.reb} reb · {star.ast} ast · {star.stl} stl · {star.blk} blk <span class="muted">({star.gp} {star.gp === 1 ? "game" : "games"})</span></p>
+          : <p class="muted small">No games yet this season.</p>}
+        <p class="sp-links small">
+          <a class="rs-btn" href={`/player/${star.id}`}>Player card →</a>
+          <a href={`https://www.facebook.com/search/videos/?q=${encodeURIComponent(star.name + " highlights")}`} target="_blank" rel="noopener">Highlights on Facebook ↗</a>
+        </p>
+        <p class="muted small">A new top-50 player every time the page loads.</p>
+      </section>
+    )}
+  </aside>
+) : (
+  <aside class="home-side home-right" aria-label="Weekly Power and new arrivals">
+    <HeatList title="Per-week power" view="weekly_nba" rows={perWeek}
+      blurb={`${HEAT_NAME.weekly_nba}: weighted 5-game blocks plus defense. This sets the tiers. Top 25.`} />
+    <section class="card side-list">
+      <h2>New to the top 50</h2>
+      {arrivals.length === 0
+        ? <p class="muted small">Nobody new since the last tier refresh.</p>
+        : (
+          <>
+            <p class="muted small">Moved into tier ranks 1–50 at the last refresh.</p>
+            <ol class="hl">
+              {arrivals.map((a) => (
+                <li>
+                  <span class="hl-rank num">{a.rank}</span>
+                  <span class="hl-who"><a href={`/player/${a.id}`}>{a.name}</a><span class="muted small">{a.nba ?? ""} · {TIER_EMOJI[a.tier as keyof typeof TIER_EMOJI]}</span></span>
+                  <span class="hl-score small muted">{a.prev_rank ? `was ${a.prev_rank}` : "new"}</span>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+      <a class="rs-btn" href="/tiers?show=movers">Biggest movers →</a>
+    </section>
+  </aside>
+)}

@@ -1,0 +1,25 @@
+---
+// A team's trading card with its live stats written into the art's blank stats box (lib/cards.ts).
+// Used on Home (small, the whole card links to the team page) and on the team page.
+import { CARD_BOX, frontStats, type CardRow } from "../lib/cards";
+import { TEAM_ART, cardSrc } from "../lib/players";
+
+interface Props { card: CardRow; season?: string; href?: string; lazy?: boolean }
+const { card, season = "", href, lazy = false } = Astro.props;
+const box = CARD_BOX[TEAM_ART[card.abv]];
+const pct = (r: number[]) => `left:${r[0]}%;top:${r[1]}%;width:${r[2] - r[0]}%;height:${r[3] - r[1]}%`;
+const Tag = href ? "a" : "div";
+---
+{cardSrc(card.abv) && (
+  <Tag class="team-card" href={href}>
+    <img src={cardSrc(card.abv)} alt={`${card.team_name} trading card`} width="960" height="1440" loading={lazy ? "lazy" : undefined}>
+    {box && <>
+      <span class={`tc-hdr rows-${box.rows}`} style={`${pct(box.hdr)};color:${box.hdrInk}`}>{season ? `${season} season` : "Season stats"}</span>
+      {/* --ut/--uh: the whole box (title strip + values), used by small cards to fit a 2 x 2 grid. */}
+      <span class={`tc-vals rows-${box.rows}`} style={`${pct(box.vals)};--ut:${box.hdr[1]}%;--uh:${box.vals[3] - box.hdr[1]}%;color:${box.ink}`}>
+        {frontStats(card).map((s) => <span class={`tc-stat k-${s.k.toLowerCase()}`}><i>{s.k}</i> <b>{s.v}</b></span>)}
+      </span>
+    </>}
+    <slot />
+  </Tag>
+)}

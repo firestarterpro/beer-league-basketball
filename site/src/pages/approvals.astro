@@ -1,0 +1,21 @@
+---
+import Base from "../layouts/Base.astro";
+import PollCard from "../components/PollCard.astro";
+import { loadPolls, managedTeams } from "../lib/polls";
+import { one } from "../lib/db";
+
+const [votes, teams, t] = await Promise.all([loadPolls("votes"), managedTeams(), one<{ n: number }>("SELECT vote_threshold() AS n")]);
+const threshold = t?.n;
+---
+<Base title="Approvals" active="/approvals">
+  <h1>Approvals</h1>
+  <p class="muted">
+    Restricted free-agent adds and IR activations. The requesting GM starts with a Yes.
+    A claim is Community-Approved with {threshold} Yes votes. The LM closes each vote after ESPN processes it.
+  </p>
+  {votes.length === 0 && <div class="card muted empty" data-emoji="🦓">No requests right now. The ref is on break.</div>}
+  <div class="grid">
+    {votes.map((p) => <PollCard poll={p} teams={teams} />)}
+  </div>
+  <script is:inline src="/polls.js"></script>
+</Base>

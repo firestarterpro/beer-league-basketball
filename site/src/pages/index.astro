@@ -1,0 +1,215 @@
+---
+import Base from "../layouts/Base.astro";
+import { query } from "../lib/db";
+import { ESPN } from "../lib/espn";
+import PetWall from "../components/PetWall.astro";
+import RuleSnippet from "../components/RuleSnippet.astro";
+import PowerSide from "../components/PowerSide.astro";
+import { TIER_EMOJI } from "../lib/tiers";
+import { MODEL_NAME, TIER_SOURCE_NAME, tierInfo } from "../lib/players";
+import { cardRows } from "../lib/cards";
+import TeamCard from "../components/TeamCard.astro";
+
+const [notes, open, board, settings, [counts], info, waivers, cards] = await Promise.all([
+  query(`SELECT n.body, n.tags, n.created_at, t.team_name
+         FROM notes n LEFT JOIN teams t ON t.team_id = n.author_team_id
+         WHERE n.visible AND NOT n.tags && ARRAY['team_change_request', 'team_change_approved']
+         ORDER BY n.created_at DESC LIMIT 25`),
+  query(`SELECT id, question, context_type FROM polls WHERE poll_is_open(id) ORDER BY created_at DESC`),
+  query(`SELECT t.team_id, t.team_name, lower(t.abv) AS abv, t.gm_name, s.rank, s.total_points::float AS points,
+                b.badge, coalesce(b.t1_count, 0) AS t1, coalesce(b.t2_count, 0) AS t2, coalesce(b.t3_count, 0) AS t3
+         FROM teams t LEFT JOIN standings s USING (team_id) LEFT JOIN team_badges b USING (team_id)
+         WHERE t.active ORDER BY s.rank NULLS LAST, t.team_name`),
+  query(`SELECT setting_key, setting_value FROM league_settings`),
+  query(`SELECT count(*) FILTER (WHERE active)::int AS active, count(*) FILTER (WHERE active AND manager_assigned)::int AS managed,
+                vote_threshold() AS votes FROM teams`),
+  tierInfo(),
+  // Players dropped in the last waiver period who haven't been picked up: the late-fee ticker (#19).
+  query(`SELECT p.name, t.team_name, x."timestamp" AS dropped_at,
+                x."timestamp" + make_interval(days => coalesce((SELECT setting_value::int FROM league_settings
+                                                                WHERE setting_key = 'waiver_period_days'), 2)) AS clears_at
+         FROM transactions x JOIN players p USING (player_id) LEFT JOIN teams t ON t.team_id = x.team_id
+         WHERE x.type = 'drop'
+           AND x."timestamp" > now() - make_interval(days => coalesce((SELECT setting_value::int FROM league_settings
+                                                                       WHERE setting_key = 'waiver_period_days'), 2))
+           AND NOT EXISTS (SELECT 1 FROM rosters r WHERE r.player_id = x.player_id)
+         ORDER BY x."timestamp" DESC LIMIT 12`),
+  cardRows(),
+]);
+const cardOf = Object.fromEntries(cards.map((c) => [c.team_id, c]));
+const BADGE: Record<string, string> = { Legal: "/img/ui/badge-legal.webp", "Power Play": "/img/ui/badge-powerplay.webp" };
+// League (Central) time: the Worker itself runs on UTC.
+const fmt = (d: string) => new Date(d).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Chicago" }) + " CT";
+const openPolls = open.filter((p) => p.context_type === "generic" || p.context_type === "scrub_nominee");
+const openVotes = open.filter((p) => p.context_type === "claim_approval" || p.context_type === "ir_activation");
+// League settings, for the rule snippets that sit next to the parts they explain.
+const S: Record<string, string> = Object.fromEntries(settings.map((r) => [r.setting_key, r.setting_value]));
+const tierSource = info.snapshot
+  ? (info.snapshot.source === "espn" && info.ranking
+      ? `${TIER_SOURCE_NAME[info.snapshot.source]} now, moving to ${TIER_SOURCE_NAME[info.ranking]}`
+      : TIER_SOURCE_NAME[info.snapshot.source] ?? info.snapshot.source)
+  : "the commissioner's power ranking";
+const scoringName = MODEL_NAME[S.scoring_model] ?? S.scoring_model ?? "the chosen model";
+const draftLine = S.draft_type === "salary_cap"
+  ? `Auction with a $${S.draft_budget} cap per team, ${S.keepers === "off" ? "no keepers" : S.keepers}.`
+  : "An auction draft.";
+---
+<Base title="Home" active="/" sides fonts="family=VT323&family=Silkscreen:wght@400;700">
+<div class="home-grid">
+<div class="home-main">
+  <section class="card closable" id="alerts" hidden
+           data-links={JSON.stringify({ team: ESPN.team(), players: ESPN.players, practice: "/practice-draft" })}>
+    <h2>Heads up</h2>
+    <ul class="alerts" id="alerts-list"></ul>
+  </section>
+  <PetWall />
+  <section class="card closable" id="league">
+    <div class="sec-head">
+      <h2>The league</h2>
+      <a class="rs-btn" href="/rules">All league rules →</a>
+    </div>
+    <div class="team-cards">
+      {board.map((t) => (
+        <div class="tcard-wrap">
+          <div class="tcard" data-team={t.team_id} data-pet-team={t.abv ?? ""}>
+            {cardOf[t.team_id]
+              ? <TeamCard card={cardOf[t.team_id]} season={S.season} href={`/team/${t.abv}`} lazy />
+              : <a class="muted" style="padding:12px" href={`/team/${t.abv}`}>{t.team_name}</a>}
+            {t.badge && BADGE[t.badge] && <img class="badge" src={BADGE[t.badge]} alt={t.badge} width="350" height="120">}
+            {t.badge === "Violation" && <span class="stamp">Violation</span>}
+          </div>
+          <p class="tcard-foot small">
+            <span>{t.gm_name ? `GM ${t.gm_name} · ` : ""}🤾 {t.t1} · ⛹️ {t.t2} · 🚶 {t.t3}{t.badge === "Violation" ? " · Over the caps" : ""}</span>
+            <button type="button" class="link dl-card" data-card-dl={t.abv}>⬇ Download card</button>
+          </p>
+        </div>
+      ))}
+    </div>
+    <div class="snippets">
+      <RuleSnippet title="Tiers & caps" href="/rules#tiers" icon={TIER_EMOJI.T1} cta="Tier rules">
+        Players are ranked {TIER_EMOJI.T1} 1–{info.t1}, {TIER_EMOJI.T2} {info.t1 + 1}–{info.t2}, {TIER_EMOJI.T3} the rest.
+        A team can hold at most {info.cap1} of each capped tier. Ranked by {tierSource}.
+      </RuleSnippet>
+      <RuleSnippet title="The draft" href="/rules#draft" icon="🏀" cta="Draft rules">
+        {draftLine} Try it against the computer at the <a href="/practice-draft">practice draft</a>.
+      </RuleSnippet>
+      <RuleSnippet title="Scoring" href="/rules#scoring" icon="📊" cta="Scoring details">
+        Season-long points, no head-to-head and no playoffs. The league voted for {scoringName} scoring.
+      </RuleSnippet>
+    </div>
+  </section>
+  <div class="grid">
+    <section class="card closable" id="upcoming">
+      <h2>Upcoming games</h2>
+      <p class="muted small" id="upcoming-sub">Pick your team at the top to see its games.</p>
+      <div class="tv">
+        <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Game days"></div>
+        <div class="tv-set">
+          <div class="tv-screen">
+            <p class="tv-label" aria-hidden="true"><span>Upcoming games</span><span class="rec">● REC</span></p>
+            <div id="upcoming-days" class="stack"></div>
+          </div>
+          <span class="tv-knobs" aria-hidden="true"></span>
+        </div>
+      </div>
+      <RuleSnippet title="Lineups" href="/rules#roster" icon="⏰" cta="Roster rules">
+        Set your lineup before each day's first game: it locks at that tip-off. {Number(S.ir_slots) || 2} IR spots, no bench.
+      </RuleSnippet>
+    </section>
+    <section class="card closable" id="open-now">
+      <h2>Open now</h2>
+      {/* The VHS shelf (#7): drag a tape to the right (or tap it) to check it out. */}
+      <div class="vhs-shelf">
+        {openVotes.length > 0 && (
+          <a class="vhs" href="/approvals" draggable="false">
+            <img src="/img/fx/vhs-approvals.webp" alt="" width="300" height="499" draggable="false">
+            <span class="vhs-sticker num">{openVotes.length} open</span>
+            <span class="sr-only">{openVotes.length} approval {openVotes.length === 1 ? "vote" : "votes"} open</span>
+          </a>
+        )}
+        {openPolls.length > 0 && (
+          <a class="vhs" href="/polls" draggable="false">
+            <img src="/img/fx/vhs-polls.webp" alt="" width="300" height="499" draggable="false">
+            <span class="vhs-sticker num">{openPolls.length} open</span>
+            <span class="sr-only">{openPolls.length} {openPolls.length === 1 ? "poll" : "polls"} open</span>
+          </a>
+        )}
+        {open.length === 0 && (
+          <div class="vhs-empty">
+            <img src="/img/toys/rewind-sticker.webp" alt="" width="100" height="102">
+            <p class="muted">Nothing to vote on right now. Be kind, rewind.</p>
+          </div>
+        )}
+      </div>
+      {open.length > 0 && <p class="small muted vhs-hint">Drag a tape to the right, or tap it, to check it out.</p>}
+      {openVotes.length > 0 && <p><a href="/approvals">{openVotes.length} approval {openVotes.length === 1 ? "vote" : "votes"}</a>: {openVotes.map((p) => p.question).join(" · ")}</p>}
+      {openPolls.length > 0 && <p><a href="/polls">{openPolls.length} {openPolls.length === 1 ? "poll" : "polls"}</a>: {openPolls.map((p) => p.question).join(" · ")}</p>}
+      <RuleSnippet title="How votes work" href="/rules#league" icon="🗳️" cta="Voting & moves">
+        A free-agent add or IR return that breaks the tier caps goes to a community vote. It passes with {counts.votes} yes
+        {counts.votes === 1 ? " vote" : " votes"} (more than half of the {counts.managed} managed teams).
+      </RuleSnippet>
+    </section>
+    <section class="card closable" id="dash-card">
+      <h2>League dashboards</h2>
+      <p class="muted">Standings, rosters with tier badges, transactions, scoring leaders and power rankings.</p>
+      <p><a href="/dashboards">Open the dashboards</a></p>
+    </section>
+  </div>
+  {waivers.length > 0 && (
+    <section class="card latefee-card closable" id="latefees">
+      <img class="lf-stamp" src="/img/fx/latefee.webp" alt="" width="470" height="448" loading="lazy">
+      <h2>On waivers</h2>
+      <p class="muted small">Dropped in the last {Number(S.waiver_period_days) || 2} days. Claims go in ESPN; the late fee is just for fun.</p>
+      <ul class="latefees">
+        {waivers.map((w) => (
+          <li data-dropped={new Date(w.dropped_at).toISOString()} data-clears={new Date(w.clears_at).toISOString()}>
+            <span class="lf-who"><b>{w.name}</b><span class="muted small">{w.team_name ? `dropped by ${w.team_name}` : "dropped"}</span></span>
+            <span class="lf-clock num" aria-label="Time until waivers clear">{fmt(w.clears_at)}</span>
+            <span class="lf-fee num" aria-hidden="true">$0.00</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+  {/* League feed as an AIM chat window (#8): spin the jog wheel to scrub through the notes. */}
+  <section class="card aim-card closable" id="feed-card">
+    <h2>League feed</h2>
+    {notes.length === 0
+      ? <p class="muted empty" data-emoji="📭">No news yet.</p>
+      : (
+        <div class="aim-win">
+          <div class="aim-title"><span>🏃 LeagueFeed · Instant Message</span><span class="aim-btns" aria-hidden="true"><i>_</i><i>□</i><i>×</i></span></div>
+          <p class="aim-to small">To: <b>The whole league</b> · {notes.length} {notes.length === 1 ? "note" : "notes"}</p>
+          <ul class="feed aim-log" id="feed" tabindex="0" aria-label="League feed">
+            {notes.map((n) => (
+              <li data-at={new Date(n.created_at).toISOString()}>
+                <span><b class="aim-who">{n.team_name ?? "League"}:</b> {n.body}</span>
+                <span class="ts">{fmt(n.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+          {notes.length > 4 && (
+            <div class="aim-foot">
+              <span class="jog" role="slider" tabindex="0" aria-label="Scrub the league feed" aria-valuemin="1" aria-valuemax={notes.length} aria-valuenow="1"></span>
+              <span class="small">Spin to scrub</span>
+            </div>
+          )}
+        </div>
+      )}
+  </section>
+</div>
+<PowerSide side="left" />
+<PowerSide side="right" />
+</div>
+  <script is:inline src="/schedule.js"></script>
+  <script is:inline src="/alerts.js"></script>
+  <script is:inline src="/toys-home.js" defer></script>
+  <script is:inline src="/card-dl.js" defer></script>
+  <script is:inline>
+    (function () {
+      const mark = () => document.querySelectorAll(".tcard").forEach((c) => c.classList.toggle("mine", c.dataset.team === window.BL.viewTeam()));
+      mark();
+      document.addEventListener("bl:team", mark);
+    })();
+  </script>
+</Base>

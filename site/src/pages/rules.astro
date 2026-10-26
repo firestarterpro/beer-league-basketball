@@ -1,0 +1,120 @@
+---
+// League settings and rules, read from league_settings (the docs' values) and scoring_models.
+import Base from "../layouts/Base.astro";
+import { query } from "../lib/db";
+import { ESPN } from "../lib/espn";
+import { TIER_EMOJI } from "../lib/tiers";
+import { MODEL_NAME, STAT_NAME, TIER_SOURCE_NAME, tierInfo } from "../lib/players";
+import RankingsExplainer from "../components/RankingsExplainer.astro";
+import ScoringExplainer from "../components/ScoringExplainer.astro";
+
+const [settings, models, rules, info, [teamCount]] = await Promise.all([
+  query(`SELECT setting_key, setting_value, source FROM league_settings`),
+  query(`SELECT model_key, stat, points::float AS points FROM scoring_models ORDER BY model_key, points DESC, stat`),
+  query(`SELECT section, text FROM rulebook ORDER BY section, effective_date`),
+  tierInfo(),
+  query(`SELECT count(*) FILTER (WHERE active)::int AS active, count(*) FILTER (WHERE active AND manager_assigned)::int AS managed,
+                vote_threshold() AS votes FROM teams`),
+]);
+const tierSource = info.snapshot ? TIER_SOURCE_NAME[info.snapshot.source] ?? info.snapshot.source : "ESPN's projection rank";
+const nextSource = info.ranking ? TIER_SOURCE_NAME[info.ranking] : "the commissioner's power ranking";
+const S: Record<string, string> = Object.fromEntries(settings.map((r) => [r.setting_key, r.setting_value]));
+const pending = new Set(settings.filter((r) => r.source === "placeholder" && (/^(tbd|none)$/.test(r.setting_value) || r.setting_key === "scoring_model"))
+  .map((r) => r.setting_key));
+const tbd = (k: string, show: (v: string) => string) => (pending.has(k) ? "To be decided (league poll)" : show(S[k] ?? ""));
+
+const byModel: Record<string, { stat: string; points: number }[]> = {};
+for (const m of models) (byModel[m.model_key] ||= []).push(m);
+const current = S.scoring_model;
+const slots = (S.starter_slots || "").split(",").filter(Boolean);
+const pts = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+
+const sections: [string, [string, string][]][] = [
+  ["Roster", [
+    ["Roster spots", `${S.roster_size}: ${slots.join(", ")}${Number(S.ir_slots) ? `, plus ${S.ir_slots} IR` : ""}`],
+    ["Bench", Number(S.bench_slots) ? `${S.bench_slots}` : "None"],
+    ["Centers", `At most ${S.center_max} per team`],
+    ["Lineups lock", S.lineup_lock === "daily_first_game" ? "Each day at the first game's tip-off" : S.lineup_lock],
+  ]],
+  ["Draft", [
+    ["Type", S.draft_type === "salary_cap" ? `Auction (salary cap), $${S.draft_budget} per team` : S.draft_type],
+    ["When", tbd("draft_datetime", (v) => (v === "2026-10-25 18:00 CT" ? "Sunday, October 25, 2026 at 6pm Central" : v))],
+    ["Keepers", S.keepers === "off" ? "None" : S.keepers],
+  ]],
+  ["Moves", [
+    ["Waivers", `${S.waiver_period_days} days. Order resets weekly, worst record first.`],
+    ["Acquisition limit", tbd("acquisition_limit", (v) => (v === "none" ? "No limit" : v))],
+    ["Trades", S.trade_review === "none" ? "No review" : S.trade_review],
+    ["Trade deadline", tbd("trade_deadline", (v) => (v === "none" ? "None" : /^\d{4}-\d{2}-\d{2}$/.test(v)
+      ? new Date(`${v}T12:00:00Z`).toLocaleDateString("en-US", { dateStyle: "long", timeZone: "UTC" }) : v))],
+  ]],
+  ["League", [
+    ["Teams", `${teamCount.active} now, room for up to ${info.maxTeams}. Everything (draft, caps, votes) scales with the team count.`],
+    ["Community votes", `Pass with ${teamCount.votes} yes votes (more than half of the ${teamCount.managed} managed teams)`],
+  ]],
+  ["Season", [
+    ["Scoring", "Total points for the season (no head-to-head)"],
+    ["Tiebreaker", tbd("tiebreaker", (v) => (v === "none" ? "None" : v))],
+    ["Playoffs", tbd("playoff_format", (v) => (v === "none" ? "No playoffs: the most points at the end of the season wins" : v))],
+  ]],
+];
+---
+<Base title="Rules" active="/rules">
+  <section class="card">
+    <h2>League rules</h2>
+    <p class="muted small">From the league's documents. ESPN runs the league, so if ESPN ever shows something different, ask the LM.
+      <a href={ESPN.settings} target="_blank" rel="noopener">ESPN's settings page ↗</a></p>
+  </section>
+
+  <div class="grid">
+    {sections.map(([title, rows]) => (
+      <section class="card" id={title.toLowerCase()}>
+        <h2>{title}</h2>
+        <dl class="settings">{rows.map(([k, v]) => <><dt>{k}</dt><dd>{v}</dd></>)}</dl>
+      </section>
+    ))}
+    <section class="card" id="tiers">
+      <h2>Tiers</h2>
+      <dl class="settings">
+        <dt>{TIER_EMOJI.T1} Tier 1</dt><dd>Ranks 1–{S.tier1_max_rank}, at most {S.tier1_cap} per team</dd>
+        <dt>{TIER_EMOJI.T2} Tier 2</dt><dd>Ranks {Number(S.tier1_max_rank) + 1}–{S.tier2_max_rank}, at most {S.tier2_cap} per team</dd>
+        <dt>{TIER_EMOJI.T3} Tier 3</dt><dd>Rank {Number(S.tier2_max_rank) + 1} and up, no limit</dd>
+        <dt>Ranked by</dt><dd>{info.snapshot?.source === "espn" ? <>Now: {tierSource}. From the next refresh: {nextSource}.</> : tierSource}</dd>
+        <dt>Refresh</dt><dd>Every {S.tier_refresh_weeks} weeks, as a new numbered snapshot</dd>
+        <dt>IR</dt><dd>Players on IR don't count toward the caps</dd>
+        <dt>⚡ Power Play</dt><dd>Over the caps from the draft, a trade or a tier refresh is legal, and it's a ⚡ Power Play.
+          Only free-agent adds and IR activations that break the caps need a community vote.</dd>
+      </dl>
+      <p class="small"><a href="/tiers">See the tier list</a> · <a href="#how">How the rankings work</a></p>
+    </section>
+  </div>
+
+  <section class="card" id="scoring">
+    <h2>Scoring</h2>
+    <p class="muted small">
+      {pending.has("scoring_model") || !byModel[current]
+        ? <>The league picks one of these three in a poll. ESPN is set up with <b>{MODEL_NAME[current] ?? current}</b> for now.</>
+        : <>The league uses <b>{MODEL_NAME[current] ?? current}</b>. The other two are shown for comparison.</>}
+      Double-, triple- and quadruple-double bonuses don't stack: a player gets only the biggest one.
+    </p>
+    <div class="grid">
+      {Object.entries(byModel).sort(([a], [b]) => Number(b === current) - Number(a === current)).map(([key, rows]) => (
+        <div class={`model${key === current && !pending.has("scoring_model") ? " mine" : ""}`}>
+          <h3>{MODEL_NAME[key] ?? key}</h3>
+          <table>
+            <tbody>{rows.map((r) => <tr><td>{STAT_NAME[r.stat] ?? r.stat}</td><td class="num">{pts(r.points)}</td></tr>)}</tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+    <ScoringExplainer open />
+    <RankingsExplainer />
+  </section>
+
+  {rules.length > 0 && (
+    <section class="card">
+      <h2>Rulebook</h2>
+      <dl class="settings">{rules.map((r) => <><dt>{r.section}</dt><dd>{r.text}</dd></>)}</dl>
+    </section>
+  )}
+</Base>

@@ -1,0 +1,168 @@
+---
+// One poll: question, voting form (while open) and public results, dressed up as toys:
+// pick one / pick any = puffy stickers (#9), ranked = yearbook cards you drag (#10), rating = Tamagotchi hearts (#11),
+// short answer = notebook paper (#12), Yes/No approvals = Double Dare noses + scoreboard (#13).
+// The form inputs underneath are the same as before, so polls.js and /api/vote don't change shape.
+import { TYPE_LABEL, type Poll } from "../lib/polls";
+import SevenSeg from "./SevenSeg.astro";
+
+interface Props { poll: Poll; teams?: number }   // teams: teams with a GM, for the poll-fuel gauge
+const { poll: p, teams = 0 } = Astro.props;
+const maxVotes = Math.max(1, ...p.options.map((o) => o.votes));
+const byRank = [...p.options].sort((a, b) => (a.average_rank ?? 99) - (b.average_rank ?? 99));
+const statusLabel: Record<string, [string, string]> = {
+  pending: ["Vote open", "warn"], approved: ["Community-Approved", "ok"], failed: ["Not approved", "bad"],
+};
+const [label, tone] = p.lm_override
+  ? [p.lm_override === "approved_override" ? "LM approved" : "LM denied", p.lm_override === "approved_override" ? "ok" : "bad"]
+  : statusLabel[p.status ?? ""] ?? [p.open ? "Open" : "Closed", p.open ? "warn" : ""];
+const isVote = p.context_type === "claim_approval" || p.context_type === "ir_activation";
+const noses = isVote && p.type === "single_choice" && p.options.length > 0 && p.options.every((o) => /^(yes|no)$/i.test(o.label.trim()));
+const decided = isVote && (p.lm_override || (p.status && p.status !== "pending"));
+const stickerOf = (i: number) => `/img/toys/sticker-${(i % 6) + 1}.webp`;
+const initials = (s: string) => s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+const FACES = ["T_T", "-_-", "o_o", "^_^", "^o^"];
+const avgFace = p.average_rating ? FACES[Math.max(0, Math.min(4, Math.round(p.average_rating) - 1))] : "o_o";
+const heartImg = (n: number) => {
+  const r = p.average_rating ?? 0;
+  return r >= n - 0.25 ? "full" : r >= n - 0.75 ? "half" : "empty";
+};
+const fuel = teams ? Math.min(3, Math.ceil((p.ballots / teams) * 3)) : 0;
+// First-place votes as yearbook tally marks: a crossed bundle per five, a stroke per one.
+const tally = (n: number) => [...Array(Math.floor(n / 5)).fill("t5"), ...Array(n % 5).fill("t1")];
+---
+<article class={`card poll${noses ? " nose-card" : ""}`} data-poll={p.id} data-type={p.type} data-context={p.context_type}>
+  <div class="row" style="justify-content: space-between">
+    <h3>{p.question}</h3>
+    {decided ? <span class={`stamp ${tone}`}>{label}</span> : <span class={`pill ${tone}`}>{label}</span>}
+  </div>
+  {p.description && <p class="muted small">{p.description}</p>}
+
+  {noses && p.tally && (
+    <div class="dd-board" role="img" aria-label={`Scoreboard: ${p.tally.yes_votes} Yes, ${p.tally.no_votes} No, ${p.tally.threshold} Yes needed`}>
+      <img src="/img/fx/scoreboard-blank.webp" alt="" width="790" height="557" loading="lazy">
+      <span class="dd-lbl dd-yes">Yes</span><span class="dd-lbl dd-no">No</span>
+      <span class="dd-num dd-yes-n"><SevenSeg value={p.tally.yes_votes} /></span>
+      <span class="dd-num dd-no-n"><SevenSeg value={p.tally.no_votes} /></span>
+      <span class="dd-need-l">Need</span>
+      <span class="dd-num dd-need"><SevenSeg value={p.tally.threshold} digits={p.tally.threshold > 9 ? 2 : 1} /></span>
+    </div>
+  )}
+  {noses && p.requester && (
+    <p class="small whistle-line"><img src="/img/fx/whistle.webp" alt="" width="22" height="36">Auto-Yes from {p.requester}, who asked for it.</p>
+  )}
+
+  {p.open && (
+    <form class="vote stack">
+      <div class="small muted vote-as"></div>
+      {noses && (
+        <div class="options noses">
+          {p.options.map((o) => {
+            const yes = /^yes$/i.test(o.label.trim());
+            return (
+              <label class={`nose ${yes ? "yes" : "no"}`}>
+                <input class="sr-only" type="radio" name={`opt-${p.id}`} value={o.id} />
+                <img class="up" src={`/img/fx/nose-${yes ? "yes" : "no"}.webp`} alt="" width="320" height="302" />
+                <img class="down" src={`/img/fx/nose-${yes ? "yes" : "no"}-pressed.webp`} alt="" width="320" height="301" />
+                <span class="sr-only">Vote {o.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+      {!noses && (p.type === "single_choice" || p.type === "multi_select") && (
+        <div class="options stickers">
+          {p.options.map((o, i) => (
+            <label class="sticker-opt">
+              <input class="sr-only" type={p.type === "single_choice" ? "radio" : "checkbox"} name={`opt-${p.id}`} value={o.id} />
+              <span class="sticker" style={`--s: url(${stickerOf(i)})`} aria-hidden="true"></span>
+              <span class="so-label">{o.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {p.type === "ranked" && (
+        <ol class="ranklist yearbook">
+          {p.options.map((o) => (
+            <li data-option={o.id}>
+              <span class="yb-grip" aria-hidden="true">⠿</span>
+              <span class="yb-photo" aria-hidden="true">{initials(o.label)}</span>
+              <span class="yb-name">{o.label}</span>
+              <button type="button" data-move="-1" aria-label={`Move ${o.label} up`}>↑</button>
+              <button type="button" data-move="1" aria-label={`Move ${o.label} down`}>↓</button>
+            </li>
+          ))}
+        </ol>
+      )}
+      {p.type === "rating" && (
+        <div class="hearts" role="radiogroup" aria-label="Your rating, 1 to 5 hearts">
+          <span class="tama" data-face="o_o" aria-hidden="true"></span>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <label class="heart"><input class="sr-only" type="radio" name={`rate-${p.id}`} value={n} /><span class="sr-only">{n} of 5</span></label>
+          ))}
+        </div>
+      )}
+      {p.type === "text" && (
+        <div class="notebook">
+          <textarea name="text" maxlength="500" aria-label="Your answer" placeholder="Write it on the order form…"></textarea>
+          <span class="doodles" aria-hidden="true"></span>
+          <span class="nb-count small num" aria-hidden="true">0 / 500</span>
+        </div>
+      )}
+      <div class="row">
+        {noses
+          ? <span class="small muted">Press a nose to vote. You can change your vote until it closes.</span>
+          : <>
+              <button class="primary" type="submit">{p.type === "single_choice" || p.type === "multi_select" ? "Stick it!" : "Vote"}</button>
+              <span class="small muted">{TYPE_LABEL[p.type]} · you can change your vote until it closes</span>
+            </>}
+      </div>
+    </form>
+  )}
+
+  <div class="stack">
+    {p.tally && (
+      <p class="num"><strong>{p.tally.yes_votes} Yes</strong> · {p.tally.no_votes} No · {p.tally.threshold} Yes needed</p>
+    )}
+    {(p.type === "single_choice" || p.type === "multi_select") && !p.tally && p.options.map((o, i) => (
+      <div class="result">
+        <span class="res-label"><img src={stickerOf(i)} alt="" width="22" height="22" loading="lazy">{o.label}</span><span class="num">{o.votes}</span>
+        <span class="bar"><i style={`width:${(o.votes / maxVotes) * 100}%`}></i></span>
+      </div>
+    ))}
+    {p.type === "ranked" && (
+      <div class="tablebox">
+        <table class="yb-tally">
+          <thead><tr><th>Option</th><th>Avg rank</th><th>1st-place votes</th></tr></thead>
+          <tbody>
+            {byRank.map((o) => (
+              <tr><td>{o.label}</td><td class="num">{o.average_rank ?? "–"}</td>
+                <td class="num"><span class="tally" aria-hidden="true">{tally(o.first_place_votes).map((c) => <i class={c}></i>)}</span> {o.first_place_votes}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+    {p.type === "rating" && (
+      <p class="num avg-hearts">Average: <span class="tama" data-face={avgFace} aria-hidden="true"></span> <strong>{p.average_rating ?? "–"}</strong> / 5
+        {p.average_rating != null && (
+          <span class="mini-hearts" aria-hidden="true">{[1, 2, 3, 4, 5].map((n) => <img src={`/img/toys/heart-${heartImg(n)}.webp`} alt="" width="18" height="16" />)}</span>
+        )}
+      </p>
+    )}
+    {p.type === "text" && (
+      <ul class="feed">
+        {p.answers.map((a) => <li><span>{a.text}</span><span class="ts">{a.team}</span></li>)}
+      </ul>
+    )}
+    <p class="small muted fuel-line">
+      {teams > 0 && (
+        <span class={`fuel lvl-${fuel}`} title={`Poll fuel: ${p.ballots} of ${teams} teams voted`} aria-hidden="true">
+          <img src="/img/toys/battery.webp" alt="" width="211" height="101" loading="lazy">
+          {[1, 2, 3].map((n) => <i class={n <= fuel ? "on" : ""}></i>)}
+        </span>
+      )}
+      <span>{teams > 0 ? `${p.ballots} of ${teams} teams voted` : `${p.ballots} ${p.ballots === 1 ? "ballot" : "ballots"}`}{p.voters.length ? `: ${p.voters.join(", ")}` : ""}</span>
+    </p>
+  </div>
+</article>

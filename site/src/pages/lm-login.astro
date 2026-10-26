@@ -1,0 +1,33 @@
+---
+// Commissioner sign-in: type the LM passcode once on each device. GMs never need this.
+import Base from "../layouts/Base.astro";
+import { isLM, lmConfigured, safeNext } from "../lib/lm-auth";
+
+const next = safeNext(Astro.url.searchParams.get("next"));
+const bad = Astro.url.searchParams.has("bad");
+const out = Astro.url.searchParams.has("out");
+const already = await isLM(Astro.request);
+---
+<Base title="LM sign-in">
+  <section class="card stack" style="max-width:460px">
+    <h2>Commissioner sign-in</h2>
+    {!lmConfigured()
+      ? <p>The LM passcode isn't set up yet. On the LM's PC, in the <code>site</code> folder, run
+          <code>npx wrangler secret put LM_PASSCODE</code> and type the code there.</p>
+      : already
+        ? <>
+            <p>✅ This device is signed in as the LM.</p>
+            <p class="row"><a class="rs-btn" href={next}>Continue →</a> <a href="/api/lm-logout">Sign this device out</a></p>
+          </>
+        : <form class="stack" method="post" action="/api/lm-login">
+            {out && <p class="muted">Signed out on this device.</p>}
+            {bad && <p role="alert" style="color:var(--bad)">That code didn't match. Try again.</p>}
+            <input type="hidden" name="next" value={next}>
+            <label class="stack">LM passcode
+              <input type="password" name="code" autocomplete="current-password" required autofocus>
+            </label>
+            <button type="submit" class="primary">Sign in</button>
+            <p class="muted small">You stay signed in on this device for a year. GMs never need this.</p>
+          </form>}
+  </section>
+</Base>

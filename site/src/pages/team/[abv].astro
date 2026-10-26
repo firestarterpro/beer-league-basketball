@@ -1,0 +1,133 @@
+---
+// Team page (#21): the team's locker. Card, jacket and yearbook photo (where the art exists) inside the door,
+// the roster as tier patches; tap a patch for a yearbook signing. /team/flag, /team/stat, ...
+import Base from "../../layouts/Base.astro";
+import { one, query } from "../../lib/db";
+import { ESPN } from "../../lib/espn";
+import { TIER_EMOJI, TIER_NAME } from "../../lib/tiers";
+import { TEAM_ART, avatarSrc } from "../../lib/players";
+import { abvLabel, cardRows } from "../../lib/cards";
+import TeamCard from "../../components/TeamCard.astro";
+
+const abv = (Astro.params.abv ?? "").toLowerCase();
+// Old team pages: SRL became MPS (2026-10-25), JST became JME (2026-10-24).
+const MOVED: Record<string, string> = { srl: "mps", jst: "jme" };
+if (MOVED[abv]) return Astro.redirect(`/team/${MOVED[abv]}`, 301);
+const team = await one<{
+  team_id: string; team_name: string; abv: string; gm_name: string | null; espn_team_id: number | null;
+  rank: number | null; points: number | null; badge: string | null; t1: number; t2: number; t3: number;
+}>(
+  `SELECT t.team_id, t.team_name, lower(t.abv) AS abv, t.gm_name, t.espn_team_id, s.rank, s.total_points::float AS points,
+          b.badge, coalesce(b.t1_count, 0)::int AS t1, coalesce(b.t2_count, 0)::int AS t2, coalesce(b.t3_count, 0)::int AS t3
+   FROM teams t LEFT JOIN standings s USING (team_id) LEFT JOIN team_badges b USING (team_id)
+   WHERE t.active AND lower(t.abv) = $1`, [abv]);
+if (!team) return new Response("No team by that name", { status: 404 });
+
+const roster = await query<{ player_id: string; player_name: string; nba_team: string | null; positions: string[] | null;
+  slot: string; position_slot: string | null; tier: "T1" | "T2" | "T3"; rank: number | null }>(
+  `SELECT player_id, player_name, nba_team, positions, slot, position_slot, tier, rank FROM roster_tiers
+   WHERE team_id = $1 ORDER BY slot = 'IR', tier, rank NULLS LAST, player_name`, [team.team_id]);
+
+const [[card], season] = await Promise.all([
+  cardRows(team.abv),
+  one<{ v: string }>(`SELECT setting_value AS v FROM league_settings WHERE setting_key = 'season'`),
+]);
+const art = TEAM_ART[team.abv];
+// Jackets and yearbook photos exist for FLAG and STAT so far (Jason's image pack 1).
+const extra = (kind: string) => (art === "flag" || art === "stat" ? `/img/teams/${kind}-${art}.webp` : null);
+const jacket = extra("jacket"), yearbook = extra("yearbook");
+const PATCH = { T1: "/img/ui/tier-t1.webp", T2: "/img/ui/tier-t2.webp", T3: "/img/ui/tier-t3.webp" };
+const BADGE: Record<string, string> = { Legal: "/img/ui/badge-legal.webp", "Power Play": "/img/ui/badge-powerplay.webp" };
+const SIGNS = ["Have a great summer!", "Never change!", "K.I.T. (keep in touch)!", "2 good 2 be 4gotten!", "Stay cool!", "See you at the draft!",
+  "You're the MVP of homeroom!", "Don't let the tier caps get you down!", "Ballin' 4ever!", "Remember the 2-day waivers!"];
+const sign = (i: number) => SIGNS[i % SIGNS.length];
+---
+<Base title={team.team_name} fonts="family=Caveat:wght@700&family=Silkscreen:wght@400;700">
+  <p class="small"><a href="/">← Home</a></p>
+  <section class="locker-head">
+    {avatarSrc(team.abv) && <img class="lh-avatar" src={avatarSrc(team.abv)} alt="" width="512" height="512">}
+    <div class="lh-text">
+      <h1>{team.team_name}</h1>
+      <p class="muted">{abvLabel(team.abv)}{team.gm_name ? ` · GM ${team.gm_name}` : ""}{team.rank ? ` · #${team.rank} in the standings` : ""}{team.points != null ? ` · ${Math.round(team.points)} pts` : ""}</p>
+      <p class="lh-tiers">{TIER_EMOJI.T1} {team.t1} · {TIER_EMOJI.T2} {team.t2} · {TIER_EMOJI.T3} {team.t3}
+        {team.badge && BADGE[team.badge] && <img src={BADGE[team.badge]} alt={team.badge} width="175" height="60">}
+        {team.badge === "Violation" && <span class="stamp">Violation</span>}
+      </p>
+    </div>
+    <div class="lh-links">
+      <a class="rs-btn" href={`/tiers?team=${team.team_id}`}>On the tier list →</a>
+      <a class="espn-btn" href={ESPN.team(team.espn_team_id)} target="_blank" rel="noopener">Team on ESPN ↗</a>
+    </div>
+  </section>
+
+  <section class="locker" aria-label={`${team.team_name} locker`}>
+    <div class="locker-vents" aria-hidden="true"></div>
+    <div class="locker-inside">
+      <div class="locker-door">
+        {card && (
+          <figure class="taped card-art">
+            <TeamCard card={card} season={season?.v} />
+          </figure>
+        )}
+        {card && <button type="button" class="rs-btn dl-card" data-card-dl={team.abv}>⬇ Download card</button>}
+        {yearbook && <img class="taped yb-art" src={yearbook} alt={`${team.team_name} yearbook photo`} width="480" height="600" loading="lazy">}
+      </div>
+      <div class="locker-hook">
+        {jacket
+          ? <img class="jacket-art" src={jacket} alt={`${team.team_name} jacket`} width="600" height="700" loading="lazy">
+          : <span class="hook-empty muted small">🧥 Jacket coming in a future image pack</span>}
+      </div>
+      <div class="locker-shelf">
+        <h2>Roster</h2>
+        {roster.length === 0 && <p class="muted empty" data-emoji="🧦">Nothing in the locker yet. The roster shows up after the draft.</p>}
+        <ul class="patches">
+          {roster.map((p, i) => (
+            <li>
+              <button type="button" class={`patch-btn ${p.tier.toLowerCase()}${p.slot === "IR" ? " ir" : ""}`} data-sign={sign(i)}
+                data-name={p.player_name} data-tier={p.tier} data-meta={`${p.nba_team ?? "Free agent"} · ${TIER_NAME[p.tier]}${p.rank ? ` · tier rank #${p.rank}` : ""}${p.slot === "IR" ? " · on IR" : ""}`}
+                data-href={`/player/${encodeURIComponent(p.player_id)}`}>
+                <img src={PATCH[p.tier]} alt="" width="256" height="256" loading="lazy">
+                <b>{p.player_name}</b>
+                <span class="small">{p.slot === "IR" ? "IR" : p.position_slot ?? (p.positions ?? []).join("/")}{p.nba_team ? ` · ${p.nba_team}` : ""}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <dialog class="yb-sign" id="yb-sign" aria-labelledby="yb-sign-name">
+    <form method="dialog" class="yb-page">
+      <img class="yb-patch" id="yb-sign-patch" src="" alt="" width="256" height="256">
+      <p class="yb-name" id="yb-sign-name"></p>
+      <p class="yb-meta small" id="yb-sign-meta"></p>
+      <p class="yb-msg" id="yb-sign-msg"></p>
+      <p class="yb-from">— {team.team_name}</p>
+      <div class="row">
+        <a class="rs-btn" id="yb-sign-link" href="#">Player card →</a>
+        <button class="link" value="close">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script is:inline src="/card-dl.js" defer></script>
+  <script is:inline>
+    // Tap a patch: the player signs the yearbook.
+    (function () {
+      const dlg = document.getElementById("yb-sign");
+      const PATCH = { T1: "/img/ui/tier-t1.webp", T2: "/img/ui/tier-t2.webp", T3: "/img/ui/tier-t3.webp" };
+      document.querySelectorAll(".patch-btn").forEach((b) => b.addEventListener("click", () => {
+        document.getElementById("yb-sign-patch").src = PATCH[b.dataset.tier];
+        document.getElementById("yb-sign-name").textContent = b.dataset.name;
+        document.getElementById("yb-sign-meta").textContent = b.dataset.meta;
+        document.getElementById("yb-sign-msg").textContent = b.dataset.sign;
+        document.getElementById("yb-sign-link").href = b.dataset.href;
+        if (window.BL && BL.sfx) BL.sfx("locker-slam");
+        if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+        setTimeout(() => window.BL && BL.sfx && BL.sfx("pencil-scratch"), 260);
+      }));
+      dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+    })();
+  </script>
+</Base>

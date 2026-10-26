@@ -1,0 +1,61 @@
+-- 007_schedule.sql
+-- NBA schedule (for "who plays when" next to the power rankings) and a log of
+-- sync runs (so the site can say when data last updated).
+
+BEGIN;
+
+-- ---------------------------------------------------------------
+-- Full NBA schedule, filled by `nba_sync.py schedule` and kept current
+-- during game nights by `nba_sync.py live`.
+-- Team codes use ESPN's spelling (PHL, PHO) so they join to players.nba_team.
+-- game_date is the NBA's (Eastern) date for the game.
+-- ---------------------------------------------------------------
+CREATE TABLE games (
+    game_id      text PRIMARY KEY,               -- NBA id, e.g. '0022600109'
+    game_date    date NOT NULL,
+    tipoff       timestamptz,                    -- NULL until the NBA sets a time
+    home_team    text NOT NULL,
+    away_team    text NOT NULL,
+    season_type  text NOT NULL,                  -- Preseason / Regular Season / NBA Cup / Play-In / Playoffs
+    status       text NOT NULL DEFAULT 'Scheduled' CHECK (status IN ('Scheduled', 'In Progress', 'Final')),
+    status_text  text,                           -- NBA's own label: '8:00 pm ET', 'Q3 4:12', 'Final'
+    home_score   integer,
+    away_score   integer,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX games_date ON games (game_date);
+CREATE TRIGGER games_touch BEFORE UPDATE ON games FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+-- ---------------------------------------------------------------
+-- One row per run of sync/update.py (morning, pregame, game, postgame, full).
+-- ---------------------------------------------------------------
+CREATE TABLE sync_runs (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    mode         text NOT NULL,
+    started_at   timestamptz NOT NULL,
+    finished_at  timestamptz NOT NULL DEFAULT now(),
+    ok           boolean NOT NULL,
+    note         text
+);
+CREATE INDEX sync_runs_finished ON sync_runs (finished_at DESC);
+
+-- Rostered players' games, for each fantasy team. The site filters by team and date.
+CREATE VIEW team_games AS
+SELECT r.team_id, p.player_id, p.name AS player_name, p.nba_team, p.status AS player_status,
+       g.game_id, g.game_date, g.tipoff, g.home_team, g.away_team, g.status, g.status_text,
+       g.home_score, g.away_score, r.slot
+FROM rosters r
+JOIN players p USING (player_id)
+JOIN games g ON p.nba_team IN (g.home_team, g.away_team);
+
+CREATE OR REPLACE VIEW report_freshness AS
+SELECT 'standings' AS dataset, max(last_updated) AS last_updated FROM standings
+UNION ALL SELECT 'rosters', max(updated_at) FROM rosters
+UNION ALL SELECT 'scores', max(created_at) FROM scoring_ledger
+UNION ALL SELECT 'transactions', max(created_at) FROM transactions
+UNION ALL SELECT 'power_rankings', max(created_at) FROM power_rankings
+UNION ALL SELECT 'games', max(updated_at) FROM games
+UNION ALL SELECT 'last_sync', max(finished_at) FROM sync_runs WHERE ok;
+
+COMMIT;

@@ -1,0 +1,42 @@
+---
+// A compact top list of one power ranking for the Home side columns: rank, places moved
+// since the last run (+n / -n), player (linked to his card), tier patch and power score.
+import { TIER_EMOJI } from "../lib/tiers";
+import type { HeatTopRow } from "../lib/players";
+
+interface Props { title: string; blurb: string; rows: HeatTopRow[]; view: string }
+const { title, blurb, rows, view } = Astro.props;
+const move = (r: HeatTopRow) => {
+  if (r.prev_rank == null) return null;
+  const d = r.prev_rank - r.rank;
+  return d === 0 ? null : d;
+};
+---
+<section class="card side-list">
+  <h2>{title}</h2>
+  <p class="muted small">{blurb}</p>
+  {rows.length === 0
+    ? <p class="muted small">No run published yet.</p>
+    : (
+      <ol class="hl">
+        {rows.map((r) => {
+          const d = move(r);
+          return (
+            <li class={r.rank <= 10 ? "top10" : ""}>
+              <span class="hl-rank num">{r.rank}</span>
+              <span class="hl-who">
+                {r.id ? <a href={`/player/${r.id}`}>{r.name}</a> : <span>{r.name}</span>}
+                <span class="muted small">{r.nba ?? ""}{r.tier ? <> · {TIER_EMOJI[r.tier as keyof typeof TIER_EMOJI]}</> : ""}</span>
+              </span>
+              <span class="hl-score num">
+                {r.score != null ? r.score.toFixed(1) : ""}
+                {d != null && <span class={`mv ${d > 0 ? "up" : "down"}`}>{d > 0 ? `+${d}` : `-${-d}`}</span>}
+                {r.prev_rank == null && rows.some((x) => x.prev_rank != null) && <span class="mv new">NEW</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    )}
+  <a class="rs-btn" href={`/tiers?view=${view}`}>Full ranking →</a>
+</section>
