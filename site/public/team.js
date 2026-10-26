@@ -68,15 +68,24 @@
   if (sync) {
     const btn = document.getElementById("sync-now");
     const label = document.getElementById("sync-status");
-    const time = (iso) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const CT = { timeZone: "America/Chicago" };
+    const time = (iso) => new Date(iso).toLocaleTimeString("en-US", { ...CT, hour: "numeric", minute: "2-digit" });
+    // "9:05 PM" today (Central), "Sat 9:05 PM" before that.
+    const stamp = (iso) => (new Date(iso).toLocaleDateString("en-US", CT) === new Date().toLocaleDateString("en-US", CT)
+      ? "" : new Date(iso).toLocaleDateString("en-US", { ...CT, weekday: "short" }) + " ") + time(iso);
+    // Newest finished job the PC's runner reported (the same last_runs as the Updates page), else the Sync button's.
+    const newest = (s) => Object.values((s.status && s.status.last_runs) || {})
+      .filter((r) => r && r.at).sort((a, b) => new Date(b.at) - new Date(a.at))[0]
+      || (s.done_at ? { at: s.done_at, ok: s.ok !== false } : null);
     let polls = 0, timer;
     const show = (s) => {
       if (!s || !s.enabled) { sync.hidden = true; return false; }
       sync.hidden = false;
       const waiting = s.requested_at && (!s.done_at || s.requested_at > s.done_at);
       btn.disabled = !!waiting;
+      const last = newest(s);
       label.textContent = waiting ? `Asked ${time(s.requested_at)}, waiting on the LM's PC`
-        : s.done_at ? `Last synced ${time(s.done_at)}${s.ok === false ? " (with errors)" : ""}` : "Updates";
+        : last ? `Last synced ${stamp(last.at)}${last.ok === false ? " (with errors)" : ""}` : "Updates";
       return waiting;
     };
     const check = () => fetch("/api/sync-now").then((r) => r.json()).then((out) => {
