@@ -4,7 +4,11 @@ Proves the SQL and parsing work against a real Postgres. It can't prove ESPN's
 live JSON still has this shape: the first real run on the LM's PC does that
 (use `python espn_sync.py dump rosters` to compare).
 
-    DATABASE_URL=postgresql://... python test_espn_sync_offline.py
+The sync commands COMMIT, so the database checks only run against a scratch database named in
+TEST_DATABASE_URL, never DATABASE_URL: importing espn_sync loads sync/.env, whose DATABASE_URL is
+the live league. Without TEST_DATABASE_URL only the parsing checks run.
+
+    TEST_DATABASE_URL=postgresql://localhost/scratch python test_espn_sync_offline.py
 """
 
 import os
@@ -51,6 +55,36 @@ ACTIVITY_JSON = {"topics": [
 ]}
 
 
+# ESPN's public NBA injury report, trimmed to the fields espn_sync reads.
+def injury(pid, part, side=None, detail=None, back=None):
+    return {"status": "Out", "athlete": {"displayName": f"Player {pid}", "links": [
+                {"href": f"https://www.espn.com/nba/player/_/id/{pid}/someone"}]},
+            "details": {"type": part, "side": side, "detail": detail, "returnDate": back}}
+
+
+INJURY_JSON = {"injuries": [
+    {"injuries": [injury(102, "Foot", "Left", "Fracture", "2026-11-20"), injury(999, "Knee", "Right")]},
+    {"injuries": [injury(103, "Illness", "Not Specified", back="2026-11-08")]},
+]}
+
+
+def check_parse():
+    """parse_injuries alone, no database needed."""
+    got = s.parse_injuries(INJURY_JSON)
+    checks = {
+        "injury parse: body part": (got["102"]["body_part"], "Foot"),
+        "injury parse: return date": (got["102"]["return_date"], "2026-11-20"),
+        "injury parse: note": (got["102"]["note"], "Left foot fracture"),
+        "injury parse: 'Not Specified' side dropped": (got["103"]["note"], "Illness"),
+        "injury parse: no return date": (got["999"]["return_date"], None),
+    }
+    failed = 0
+    for name, (got_, want) in checks.items():
+        failed += got_ != want
+        print(f"{'PASS' if got_ == want else 'FAIL'}  {name}: {got_!r}" + ("" if got_ == want else f" (want {want!r})"))
+    return len(checks), failed
+
+
 class FakeRequest:
     def league_get(self, params=None, headers=None, extend=""):
         if extend == "/communication/":
@@ -73,12 +107,18 @@ class FakeLeague:
 
 
 def main():
+    total, failed = check_parse()
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url or url == os.environ.get("DATABASE_URL"):
+        print(f"{total - failed} passed, {failed} failed (no scratch TEST_DATABASE_URL: database checks skipped)")
+        return
     league = FakeLeague()
     args = types.SimpleNamespace(limit=600, tx_limit=100, period=None, version=99, effective="2025-10-01")
-    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+    with psycopg.connect(url) as conn:
         for cmd in (s.cmd_teams, s.cmd_players, s.cmd_rosters, s.cmd_transactions,
                     s.cmd_transactions, s.cmd_standings, s.cmd_scores, s.cmd_tiers):
             cmd(league, conn, args)
+        s.cmd_injuries(league, conn, args, data=INJURY_JSON)
         cur = conn.cursor()
         checks = {
             "teams linked": ("SELECT count(*) FROM teams WHERE espn_team_id IS NOT NULL", 2),
@@ -101,7 +141,18 @@ def main():
             "tier snapshot": ("SELECT count(*) FROM tier_assignments ta JOIN tier_snapshots ts "
                               "USING (snapshot_id) WHERE ts.version = 99", 3),
         }
-        failed = 0
+        cur.execute("SELECT count(*) FROM information_schema.columns WHERE table_name = 'players' "
+                    "AND column_name = 'injury_return_date'")
+        if cur.fetchone()[0]:       # 018_injury_details.sql has run
+            checks |= {
+                "injury body part": ("SELECT injury_body_part FROM players WHERE player_id = '102'", "Foot"),
+                "injury return date": ("SELECT injury_return_date::text FROM players WHERE player_id = '102'", "2026-11-20"),
+                "injury note": ("SELECT injury_note FROM players WHERE player_id = '102'", "Left foot fracture"),
+                "healthy player cleared": ("SELECT count(*) FROM players WHERE player_id = '101' "
+                                           "AND injury_note IS NULL AND injury_return_date IS NULL", 1),
+                "unknown player ignored": ("SELECT count(*) FROM players WHERE player_id = '999'", 0),
+            }
+        total += len(checks)
         for name, (sql, want) in checks.items():
             cur.execute(sql)
             got = cur.fetchone()[0]
@@ -109,7 +160,7 @@ def main():
             failed += not ok
             print(f"{'PASS' if ok else 'FAIL'}  {name}: {got}" + ("" if ok else f" (want {want})"))
         conn.rollback()
-        print(f"{len(checks) - failed} passed, {failed} failed")
+        print(f"{total - failed} passed, {failed} failed")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ re-run: rows are upserted or de-duplicated.
 
     python espn_sync.py teams          # link ESPN teams to the teams table
     python espn_sync.py players        # NBA player pool, injuries, ESPN ranks
+    python espn_sync.py injuries       # body part + estimated return date from ESPN's NBA injury report
     python espn_sync.py rosters        # current rosters (replaces rosters table)
     python espn_sync.py transactions   # recent adds/drops/waivers/trades (append-only)
     python espn_sync.py standings      # cumulative points + rank
@@ -20,11 +21,13 @@ re-run: rows are upserted or de-duplicated.
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import psycopg
+import requests
 from dotenv import load_dotenv
 from espn_api.basketball import League
 from espn_api.basketball.constant import POSITION_MAP, PRO_TEAM_MAP
@@ -47,6 +50,10 @@ ACQUIRED_VIA = {"DRAFT": "draft", "ADD": "free_agent", "WAIVER": "waiver", "TRAD
 # ESPN activity message ids -> transactions.type
 MESSAGE_TYPES = {178: "add", 180: "waiver", 179: "drop", 181: "drop", 239: "drop", 244: "trade"}
 SINGLE_GAME_SPLIT = 5   # ESPN statSplitTypeId for one scoring period
+# ESPN's public NBA injury report: every listed injury with body part, side and estimated return date.
+# Its athlete ids are the same as the fantasy player ids.
+INJURIES_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
+INJURY_COLUMNS = ("injury_body_part", "injury_side", "injury_detail", "injury_return_date")   # migration 018
 
 
 def env(name):
@@ -107,11 +114,32 @@ def upsert_player(cur, p, rank=None):
            VALUES (%s, %s, %s, %s, %s, %s, %s)
            ON CONFLICT (player_id) DO UPDATE SET
                name = EXCLUDED.name, nba_team = EXCLUDED.nba_team, positions = EXCLUDED.positions,
-               status = EXCLUDED.status, injury_note = EXCLUDED.injury_note,
+               status = EXCLUDED.status, injury_note = coalesce(EXCLUDED.injury_note, players.injury_note),
                auction_value = coalesce(EXCLUDED.auction_value, players.auction_value)""",
         (str(p["id"]), p["fullName"], PRO_TEAM_MAP.get(p.get("proTeamId"), None), positions,
          p.get("injuryStatus", "ACTIVE"), (p.get("injuryDetails") or {}).get("type"), auction or None),
     )
+
+
+def parse_injuries(data):
+    """ESPN injury report JSON -> {player_id: {body_part, side, detail, return_date, note}}.
+    The athlete has no id field of its own; it's in his ESPN links (.../id/4712863/...)."""
+    out = {}
+    for team in data.get("injuries", []):
+        for inj in team.get("injuries", []):
+            ath = inj.get("athlete") or {}
+            pid = next((m.group(1) for link in ath.get("links", [])
+                        if (m := re.search(r"/id/(\d+)", link.get("href", "")))), None)
+            d = inj.get("details") or {}
+            if not pid or pid in out:
+                continue                # one entry per player; keep the first if ESPN ever repeats him
+            part, side, detail = d.get("type"), d.get("side"), d.get("detail")
+            # 'Left foot fracture'; 'Illness' / 'Rest' alone. ESPN says 'Not Specified' for no side.
+            side = side if side and side != "Not Specified" else None
+            note = " ".join(w for w in (side, (part or "").lower() if side else part, (detail or "").lower()) if w)
+            out[pid] = {"body_part": part, "side": side, "detail": detail,
+                        "return_date": (d.get("returnDate") or "")[:10] or None, "note": note or None}
+    return out
 
 
 def upsert_stats(cur, p, year):
@@ -165,6 +193,38 @@ def cmd_players(league, conn, args):
     conn.commit()
     print(f"players: {len(data['players'])} upserted")
     return data["players"]
+
+
+def cmd_injuries(league, conn, args, data=None):
+    """Body part and estimated return date for every injured player (clears everyone else).
+    Skips quietly until migration 018 adds the columns, and never stops the nightly run."""
+    with conn.cursor() as cur:
+        cur.execute("""SELECT count(*) FROM information_schema.columns
+                       WHERE table_name = 'players' AND column_name = ANY(%s)""", (list(INJURY_COLUMNS),))
+        if cur.fetchone()[0] < len(INJURY_COLUMNS):
+            print("injuries: skipped, run db/migrate.py first (018_injury_details.sql)")
+            return
+        if data is None:
+            try:
+                res = requests.get(INJURIES_URL, timeout=30)
+                res.raise_for_status()
+                data = res.json()
+            except Exception as e:      # a bad night at ESPN leaves yesterday's injuries in place
+                print(f"injuries: ESPN injury report failed ({e}); nothing changed")
+                return
+        hurt = parse_injuries(data)
+        cur.execute("""UPDATE players SET injury_body_part = NULL, injury_side = NULL, injury_detail = NULL,
+                           injury_return_date = NULL, injury_note = NULL, injury_updated_at = now()
+                       WHERE injury_note IS NOT NULL OR injury_body_part IS NOT NULL OR injury_return_date IS NOT NULL""")
+        cur.executemany(
+            """UPDATE players SET injury_body_part = %(body_part)s, injury_side = %(side)s, injury_detail = %(detail)s,
+                   injury_return_date = %(return_date)s, injury_note = %(note)s, injury_updated_at = now()
+               WHERE player_id = %(pid)s""",
+            [{"pid": pid, **v} for pid, v in hurt.items()])
+        cur.execute("SELECT count(*) FROM players WHERE injury_body_part IS NOT NULL")
+        found = cur.fetchone()[0]
+    conn.commit()
+    print(f"injuries: {len(hurt)} on ESPN's report, {found} of them in our player pool")
 
 
 def cmd_tiers(league, conn, args):
@@ -345,7 +405,7 @@ def cmd_scores(league, conn, args):
 
 
 def cmd_nightly(league, conn, args):
-    for step in (cmd_players, cmd_rosters, cmd_transactions, cmd_standings, cmd_scores):
+    for step in (cmd_players, cmd_rosters, cmd_transactions, cmd_standings, cmd_scores, cmd_injuries):
         step(league, conn, args)
     with conn.cursor() as cur:
         cur.execute(
@@ -369,7 +429,7 @@ def cmd_dump(league, conn, args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("teams", "rosters", "standings"):
+    for name in ("teams", "rosters", "standings", "injuries"):
         sub.add_parser(name)
     for name in ("players", "nightly"):
         s = sub.add_parser(name)

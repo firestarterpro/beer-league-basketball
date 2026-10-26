@@ -12,8 +12,8 @@
   let sort = null;                // { key, dir } from a header click; null = the "Rank by" order
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const PATCH = { T1: "/img/ui/tier-t1.webp", T2: "/img/ui/tier-t2.webp", T3: "/img/ui/tier-t3.webp" };
-  // NBA.com headshot (same URL as lib/players.ts headshotSrc); an empty circle when there's none.
-  const face = (r) => r.nba_id
+  // NBA.com headshot (same URL as lib/players.ts headshotSrc) for players photoSql allows; an empty circle otherwise.
+  const face = (r) => r.photo && r.nba_id
     ? `<img class="face" src="https://cdn.nba.com/headshots/nba/latest/260x190/${Number(r.nba_id)}.png" alt="" width="30" height="30" loading="lazy" onerror="this.style.visibility='hidden'">`
     : `<span class="face" aria-hidden="true"></span>`;
 
@@ -181,8 +181,14 @@
       const heat = k != null && k <= 50 ? Math.ceil(k / 10) : 0;
       const cls = [heat ? `heat-${heat}` : "", k != null && k <= 25 ? "top25" : "", k != null && k <= 10 ? "top10" : "",
         mine && r.team === mine ? "mine" : ""].filter(Boolean).join(" ");
+      // Same wording as lib/players.ts injuryText: "Left foot (fracture) · Back ~Nov 20".
+      const part = r.inj_part ? [r.inj_side, r.inj_side ? r.inj_part.toLowerCase() : r.inj_part].filter(Boolean).join(" ")
+        + (r.inj_detail ? ` (${r.inj_detail.toLowerCase()})` : "") : r.injury;
+      const back = r.inj_back ? "Back ~" + new Date(r.inj_back + "T12:00:00Z")
+        .toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "";
       const hurt = r.status && !/^active$/i.test(r.status)
-        ? `<span class="pill bad" title="${esc(r.injury || "")}">${esc(r.status.replace(/_/g, " "))}</span>` : "";
+        ? `<span class="pill bad" title="${esc([part, back].filter(Boolean).join(" · "))}">${esc(r.status.replace(/_/g, " "))}</span>`
+          + (part || back ? `<span class="inj small">${esc([part, back].filter(Boolean).join(" · "))}</span>` : "") : "";
       return `<tr class="${cls}">
         <th scope="row" class="who"><a href="/player/${encodeURIComponent(r.id)}">
           <span class="rk num">${k ?? "–"}</span>

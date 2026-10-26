@@ -6,8 +6,8 @@ import { query } from "../../lib/db";
 import { ESPN } from "../../lib/espn";
 import { TIER_EMOJI, TIER_NAME } from "../../lib/tiers";
 import {
-  HEAT, HEAT_NAME, MODEL_NAME, SPLITS, SPLIT_NAME, avatarSrc, asSplit, formula, headshotSrc, leagueModel, nbaPage, playerRow,
-  pointsNeighbours,
+  HEAT, HEAT_NAME, MODEL_NAME, NBA_INJURY_REPORT, SPLITS, SPLIT_NAME, avatarSrc, asSplit, formula, headshotSrc, injuryText,
+  isHurt, leagueModel, nbaPage, playerRow, pointsNeighbours,
 } from "../../lib/players";
 
 const id = Astro.params.id ?? "";
@@ -36,6 +36,7 @@ const pct = (m: string, a: string) => (Number(t[a]) ? `${((100 * Number(t[m] ?? 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const sign = (n: number) => (n > 0 ? `+${fmt(n)}` : fmt(n));
 const hurt = p.status && !/^active$/i.test(p.status);
+const inj = injuryText(p);
 const box: [string, string][] = [
   ["PTS", pg("pts")], ["REB", pg("reb")], ["AST", pg("ast")], ["STL", pg("stl")], ["BLK", pg("blk")],
   ["3PM", pg("tpm")], ["FG%", pct("fgm", "fga")], ["FT%", pct("ftm", "fta")], ["TO", pg("tov")], ["MIN", pg("min")],
@@ -56,12 +57,17 @@ const q = (m: string, s: string) => `?model=${m}&split=${s}`;
 
   <article class={`pcard pcard-${tier.toLowerCase()}`}>
     <div class="pcard-top">
-      {headshotSrc(p.nba_id, true) &&
+      {p.photo && headshotSrc(p.nba_id, true) &&
         <img class="pcard-face" src={headshotSrc(p.nba_id, true)} alt={p.name} width="260" height="190" onerror="this.remove()">}
       <div class="pcard-name">
         <h1>{p.name}</h1>
         <p class="muted">{p.nba ?? "Free agent"} · {(p.pos || []).join(" / ") || "–"}
-          {hurt && <> · <span class="pill bad" title={p.injury ?? ""}>{p.status.replace(/_/g, " ")}{p.injury ? ` (${p.injury})` : ""}</span></>}</p>
+          {hurt && !isHurt(p.status) && <> · <span class="pill bad">{p.status.replace(/_/g, " ")}</span></>}</p>
+        {isHurt(p.status) &&
+          <p class="inj-line"><span class="pill bad">{p.status.replace(/_/g, " ")}</span>
+            {inj.what ? <b>{inj.what}</b> : p.injury && <b>{p.injury}</b>}
+            {inj.back && <span class="inj-back">{inj.back}</span>}
+            <a class="small" href={NBA_INJURY_REPORT} target="_blank" rel="noopener">NBA injury report ↗</a></p>}
         {nbaPage(p.nba_id) && <p class="small"><a href={nbaPage(p.nba_id)} target="_blank" rel="noopener">NBA.com profile ↗</a></p>}
       </div>
       <div class="pcard-tier">

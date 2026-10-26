@@ -159,6 +159,7 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 .pt .who a { display: grid; grid-template-columns: 30px 30px 30px minmax(0, 1fr); gap: 6px; align-items: center; color: inherit; text-decoration: none; }
 .pt .who .nm { display: grid; white-space: normal; line-height: 1.2; }
 .pt .who .pill { justify-self: start; font-size: 11px; padding: 3px 6px; }
+.pt .who .inj { color: var(--bad); font-weight: 700; }
 .pt .rk { font: 800 17px/1 var(--display); text-align: right; color: var(--muted); }
 .pt tbody tr:hover > * { filter: brightness(1.04); }
 .pt tr.mine > .who { box-shadow: inset 4px 0 0 var(--accent); }
@@ -189,6 +190,9 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 .pcard-name { display: grid; gap: 4px; min-width: 0; flex: 1 1 220px; }
 .pcard-face { width: 180px; height: auto; aspect-ratio: 260 / 190; object-fit: cover; border-radius: 10px; border: 2px solid currentColor; background: rgb(255 255 255 / .06); }
 @media (max-width: 560px) { .pcard-face { width: 120px; } }
+/* Hurt player: status pill, body part, estimated return date, link to NBA's injury report. */
+.inj-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.inj-line .inj-back { font-weight: 700; color: var(--bad); }
 .pcard-name h1 { font-size: clamp(28px, 7vw, 40px); }
 .pcard-tier { display: grid; justify-items: center; gap: 4px; font: 700 15px/1 var(--display); text-transform: uppercase; }
 .pcard-t1 .pcard-tier img { filter: drop-shadow(0 0 8px rgb(255 190 40 / .8)); }

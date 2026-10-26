@@ -35,10 +35,33 @@ export const TEAM_ART: Record<string, string> = {
 };
 export const avatarSrc = (abv?: string | null) => (abv && TEAM_ART[abv] ? `/img/teams/avatar-${TEAM_ART[abv]}.webp` : null);
 // NBA.com headshots and player pages, by NBA.com person id (nba_sync.py link fills players.nba_person_id).
-// Loaded straight from NBA.com's image CDN; a player without an id just shows no photo.
+// Loaded straight from NBA.com's image CDN; who gets one is photoSql below.
 export const headshotSrc = (nbaId?: number | null, big = false) =>
   nbaId ? `https://cdn.nba.com/headshots/nba/latest/${big ? "1040x760" : "260x190"}/${nbaId}.png` : null;
 export const nbaPage = (nbaId?: number | null) => (nbaId ? `https://www.nba.com/player/${nbaId}` : null);
+// Photos only for players on a 2026-27 NBA roster who are playing or hurt: an NBA.com id (nba_sync.py link
+// only gives ids from NBA.com's current-season roster list), an NBA team at ESPN (not FA), and an ESPN
+// status of active or one of the injury ones. Free agents, retirees and suspended players get no photo.
+export const INJURED = ["DAY_TO_DAY", "OUT", "INJURY_RESERVE", "QUESTIONABLE", "DOUBTFUL", "PROBABLE"];
+export const photoSql = (p = "p") =>
+  `(${p}.nba_person_id IS NOT NULL AND coalesce(${p}.nba_team, 'FA') <> 'FA'
+    AND upper(${p}.status) IN ('ACTIVE', ${INJURED.map((s) => `'${s}'`).join(", ")}))`;
+// Body part, side and estimated return date (espn_sync.py injuries, migration 018). Read through to_jsonb
+// so the query still works, with nulls, before 018 has added the columns.
+export const injurySql = (p = "p") =>
+  `to_jsonb(${p}) ->> 'injury_body_part' AS inj_part, to_jsonb(${p}) ->> 'injury_side' AS inj_side,
+   to_jsonb(${p}) ->> 'injury_detail' AS inj_detail, to_jsonb(${p}) ->> 'injury_return_date' AS inj_back`;
+export const NBA_INJURY_REPORT = "https://official.nba.com/nba-injury-report-2026-27-season/";
+export const isHurt = (status?: string | null) => !!status && INJURED.includes(status.toUpperCase());
+/** 'Left foot (fracture)' and 'Back ~Nov 20', from a row with injurySql's columns; nulls when unknown. */
+export function injuryText(r: { inj_part?: string | null; inj_side?: string | null; inj_detail?: string | null; inj_back?: string | null }) {
+  const part = r.inj_part ? [r.inj_side, r.inj_side ? r.inj_part.toLowerCase() : r.inj_part].filter(Boolean).join(" ") : null;
+  const what = part ? part + (r.inj_detail ? ` (${r.inj_detail.toLowerCase()})` : "") : null;
+  const back = r.inj_back
+    ? `Back ~${new Date(`${r.inj_back}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`
+    : null;
+  return { what, back };
+}
 export const cardSrc =(abv?: string | null) => (abv && TEAM_ART[abv] ? `/img/teams/card-${TEAM_ART[abv]}.webp` : null);
 
 // SQL for a name with accents, punctuation and Jr./III dropped, the same as sync/power_tiers.py
@@ -96,6 +119,7 @@ const ROW_SQL = `
           WHERE h.nba_person_id IS NULL) h
     GROUP BY h.player_id)
   SELECT p.player_id AS id, p.name, p.nba_team AS nba, p.positions AS pos, p.status, p.injury_note AS injury, p.nba_person_id AS nba_id,
+         ${photoSql()} AS photo, ${injurySql()},
          p.auction_value::float AS value, ct.rank::int AS tier_rank, coalesce(ct.tier, 'T3') AS tier,
          t.team_id AS team, t.team_name AS team_name, lower(t.abv) AS abv, r.slot,
          coalesce(ps.games, 0) AS gp, coalesce(ps.totals, '{}') AS t, ps.espn_points::float AS espn,

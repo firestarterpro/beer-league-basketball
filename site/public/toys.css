@@ -121,7 +121,9 @@ main.fx-flash { filter: contrast(1.7) brightness(1.3) saturate(.5); }
 /* Two copies of the games side by side; the track slides left by one copy, so the loop is seamless. */
 .tk-track { display: flex; gap: 34px; width: max-content; padding: 8px 34px 8px 0; margin-left: 120px; animation: tk-scroll var(--tk-dur, 60s) linear infinite; }
 .ticker:hover .tk-track, .ticker:focus-within .tk-track { animation-play-state: paused; }
-.tk-game { display: inline-flex; gap: 7px; align-items: center; white-space: nowrap; }
+.tk-game { display: inline-flex; gap: 7px; align-items: center; white-space: nowrap; color: inherit; text-decoration: none; }
+.tk-game:hover span:first-child, .tk-game:focus-visible span:first-child { text-decoration: underline; }
+.tk-label { align-self: center; padding: 3px 8px; border-radius: 4px; background: #ffd23f; color: #050505; white-space: nowrap; }
 .tk-game b { color: #fff; }
 .tk-game .st { color: #b9b39b; }
 .tk-game.live .st { color: #ff6b6b; }
@@ -557,6 +559,9 @@ html.xp-locked { overflow: hidden; }
   background: #f6eedb; border: 2px solid #1b1f24; }
 .patch-btn b { font: 800 14px/1.1 var(--display); text-transform: uppercase; overflow-wrap: anywhere; }
 .patch-btn span { color: #4f4a3d; }
+/* Hurt player: status, body part and estimated return, in nurse's-office red. */
+.patch-btn .inj-tag { color: #8f1d1d; background: #ffe3dc; border: 1px solid #e3a597; border-radius: 6px; padding: 2px 6px;
+  font: 700 11px/1.25 var(--body); }
 .patch-btn.t1 { border-color: #c99a1e; background: radial-gradient(circle at 50% 30%, #fff8d9, #f2dc8a); }
 .patch-btn.t2 { border-color: #8d99a6; background: radial-gradient(circle at 50% 30%, #ffffff, #dde3ea); }
 .patch-btn.ir { opacity: .7; filter: grayscale(.4); }

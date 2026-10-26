@@ -436,9 +436,14 @@
         const games = res.ok ? res.data : [];
         if (!games.length) { box.hidden = true; return; }
         const live = games.some((g) => g.status === 2);
-        const items = games.map((g) => `<span class="tk-game${g.status === 2 ? " live" : ""}${g.mine ? " mine" : ""}">`
-          + `<span>${BL.esc(g.away_team)} <b>${BL.esc(score(g))}</b> ${BL.esc(g.home_team)}</span><span class="st">${BL.esc(status(g))}</span></span>`).join("");
-        box.innerHTML = `<span class="tk-badge">${live ? "<i></i>Live" : "Today"}</span><div class="tk-track">${items}${calm() ? "" : `<span aria-hidden="true" style="display:contents">${items}</span>`}</div>`;
+        // Each game links to its NBA.com page: box score tonight, video recap for last night's finals.
+        const game = (g) => `<a class="tk-game${g.status === 2 ? " live" : ""}${g.mine ? " mine" : ""}" href="${BL.esc(g.url)}" target="_blank" rel="noopener"`
+          + ` title="${BL.esc(g.day === "yesterday" ? "Recap on NBA.com" : "Game on NBA.com")}">`
+          + `<span>${BL.esc(g.away_team)} <b>${BL.esc(score(g))}</b> ${BL.esc(g.home_team)}</span><span class="st">${BL.esc(status(g))}</span></a>`;
+        const today = games.filter((g) => g.day !== "yesterday"), lastNight = games.filter((g) => g.day === "yesterday");
+        const items = today.map(game).join("")
+          + (today.length && lastNight.length ? `<span class="tk-label">Last night</span>` : "") + lastNight.map(game).join("");
+        box.innerHTML = `<span class="tk-badge">${live ? "<i></i>Live" : today.length ? "Today" : "Last night"}</span><div class="tk-track">${items}${calm() ? "" : `<span aria-hidden="true" style="display:contents">${items}</span>`}</div>`;
         box.style.setProperty("--tk-dur", Math.max(30, games.length * 7) + "s");
         box.hidden = false;
       } catch { box.hidden = true; }
