@@ -1,4 +1,5 @@
-// Home page "Heads up": roster moves the picked team should make in ESPN.
+// Home page "Heads up": roster and lineup moves the picked team should make in ESPN. One line each;
+// the [[action]] words in the text are the link (to the right day's lineup, the team page or free agents).
 document.addEventListener("DOMContentLoaded", () => {
   const card = document.getElementById("alerts");
   const list = document.getElementById("alerts-list");
@@ -13,13 +14,20 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch(`/api/alerts?team=${encodeURIComponent(team)}`).then((r) => r.json());
       if (!res.ok || !res.data.length || card.dataset.closed) return;
       const n = window.BL.espnTeam(team);
-      const href = (l) => (l === "team" ? links.team + (n ? `&teamId=${n}` : "") : links[l]);
-      const label = { team: "Fix it in ESPN ↗", players: "Add players in ESPN ↗", practice: "Practice draft" };
-      const text = (a) => (a.link === "team" && a.level === "info" ? "Check in ESPN ↗" : label[a.link]);
-      list.innerHTML = res.data.map((a) => `<li class="${a.level === "info" ? "info" : ""}">
-          <span>${esc(a.text)}</span>
-          ${a.link ? `<a class="small" href="${esc(href(a.link))}"${a.link === "practice" ? "" : ' target="_blank" rel="noopener"'}>${text(a)}</a>` : ""}
-        </li>`).join("");
+      const href = (a) => {
+        if (a.link === "players") return links.players;
+        const u = new URL(a.link === "lineup" ? links.lineup : links.team);
+        if (n) u.searchParams.set("teamId", n);
+        if (a.link === "lineup") u.searchParams.set("scoringPeriodId", String(window.BL.period(a.day ?? 1)));
+        return u.toString();
+      };
+      list.innerHTML = res.data.map((a) => {
+        const parts = esc(a.text).split(/\[\[|\]\]/);
+        const html = a.link && parts.length === 3
+          ? `${parts[0]}<a href="${esc(href(a))}" target="_blank" rel="noopener">${parts[1]} ↗</a>${parts[2]}`
+          : esc(a.text.replace(/\[\[|\]\]/g, ""));
+        return `<li class="${a.level === "info" ? "info" : ""}"><span>${html}</span></li>`;
+      }).join("");
       card.hidden = false;
     } catch {}
   }

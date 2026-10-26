@@ -1,10 +1,18 @@
 // Team picker + voting-team lock. No accounts: everything lives on this device.
-//   bl.viewTeam  - whose dashboard you're looking at (switch freely)
+//   bl.viewTeam  - whose dashboard you're looking at (switch freely). Picked "just for now" in the
+//                  pick-my-team pop-up, it lives in sessionStorage instead and is gone when the browser closes.
 //   bl.voteTeam  - stamped on your first vote; later ballots use it
 //   bl.deviceId  - random id so the LM can approve a voting-team change
 (function () {
   const get = (k) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } };
   const set = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  const sget = (k) => { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } };
+  const sset = (k, v) => { try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch {} };
+  // ESPN's day number: scoring period 7 = Oct 26, 2026, in league (Central) time. Same as lib/espn.ts lineupPeriod.
+  const period = (offsetDays) => {
+    const [m, d, y] = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago" }).split("/").map(Number);
+    return Math.max(1, 7 + Math.round((Date.UTC(y, m - 1, d + offsetDays) - Date.UTC(2026, 9, 26)) / 864e5));
+  };
 
   if (!get("bl.deviceId")) set("bl.deviceId", (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2));
 
@@ -12,7 +20,16 @@
 
   window.BL = {
     tier: (t) => TIER_EMOJI[t] || TIER_EMOJI.T3,
-    viewTeam: () => get("bl.viewTeam"),
+    viewTeam: () => get("bl.viewTeam") || sget("bl.viewTeam"),
+    // save: true keeps it on this device; false = just for this visit.
+    setViewTeam(id, save) {
+      if (save) { set("bl.viewTeam", id); sset("bl.viewTeam", ""); }
+      else { try { localStorage.removeItem("bl.viewTeam"); } catch {} sset("bl.viewTeam", id); }
+      const picker = document.getElementById("team-picker");
+      if (picker) picker.value = id;
+      document.dispatchEvent(new CustomEvent("bl:team", { detail: id }));
+    },
+    period,
     voteTeam: () => get("bl.voteTeam"),
     deviceId: () => get("bl.deviceId"),
     setVoteTeam: (id) => set("bl.voteTeam", id),
@@ -39,12 +56,15 @@
     },
   };
 
-  // Point every "My team on ESPN" link at the picked team.
+  // Point every "My team on ESPN" link at the picked team, and every lineup link at that team's lineup for tomorrow
+  // (or data-day="0" for today). A link with its own data-team (team pages) keeps that team.
   const espnLinks = () => {
-    const n = window.BL.espnTeam(get("bl.viewTeam"));
-    document.querySelectorAll('a[data-espn="team"]').forEach((a) => {
+    const n = window.BL.espnTeam(window.BL.viewTeam());
+    document.querySelectorAll('a[data-espn="team"], a[data-espn="lineup"]').forEach((a) => {
       const u = new URL(a.href);
-      if (n) u.searchParams.set("teamId", n); else u.searchParams.delete("teamId");
+      const team = a.dataset.team || n;
+      if (team) u.searchParams.set("teamId", team); else u.searchParams.delete("teamId");
+      if (a.dataset.espn === "lineup") u.searchParams.set("scoringPeriodId", String(period(Number(a.dataset.day ?? 1))));
       a.href = u.toString();
     });
   };
@@ -53,10 +73,10 @@
   document.addEventListener("DOMContentLoaded", () => {
   const picker = document.getElementById("team-picker");
   if (picker) {
-    picker.value = get("bl.viewTeam");
+    picker.value = window.BL.viewTeam();
     espnLinks();
     picker.addEventListener("change", () => {
-      set("bl.viewTeam", picker.value);
+      if (sget("bl.viewTeam") && !get("bl.viewTeam")) sset("bl.viewTeam", picker.value); else set("bl.viewTeam", picker.value);
       const go = () => document.dispatchEvent(new CustomEvent("bl:team", { detail: picker.value }));
       // toys.js: velcro rip + TV static first, then the page switches teams
       if (window.BL.fx && window.BL.fx.teamSwitch) window.BL.fx.teamSwitch(go); else go();

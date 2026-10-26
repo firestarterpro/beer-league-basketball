@@ -9,8 +9,9 @@ import { THEMES, themeFor, themeName } from "../lib/themes";
 
 // sides: the page lays out its own side columns (Home). Every other page gets a side column only while a poll is open.
 // fonts: extra Google Fonts a page's toys use (css2 query, e.g. "family=VT323").
-interface Props { title: string; active?: string; sides?: boolean; fonts?: string }
-const { title, active = "", sides = false, fonts: pageFonts = "" } = Astro.props;
+// shortcuts: false hides the Fantasy Shortcuts bar (stat pages).
+interface Props { title: string; active?: string; sides?: boolean; fonts?: string; shortcuts?: boolean }
+const { title, active = "", sides = false, fonts: pageFonts = "", shortcuts = true } = Astro.props;
 // Every page has its own theme; a visitor's pick in the theme bar (bl.theme on their device) wins over it.
 const pageTheme = themeFor(Astro.url.pathname);
 const themeFonts = Object.fromEntries(THEMES.map((t) => [t.key, t.fonts]));
@@ -54,6 +55,7 @@ const nav = [
   <link rel="stylesheet" href="/themes.css">
   <link rel="stylesheet" href="/toys.css">
   <script is:inline src="/team.js"></script>
+  <script is:inline src="/pick-team.js" defer></script>
   <script is:inline src="/toys.js" defer></script>
 </head>
 <body>
@@ -88,11 +90,11 @@ const nav = [
         <GigaPet />
       </div>
     </div>
-    {/* Fantasy Shortcuts: ESPN links in the header bar on every page. */}
-    <nav class="wrap shortcut-bar" aria-label="Fantasy Shortcuts">
+    {/* Fantasy Shortcuts: ESPN links in the header bar. Stat pages (Stats, player cards) go without; they get a lineup + trades line instead. */}
+    {shortcuts && <nav class="wrap shortcut-bar" aria-label="Fantasy Shortcuts">
       <b>ESPN ↗</b>
-      {SHORTCUTS.map(([label, href, team]) => <a href={href} target="_blank" rel="noopener" data-espn={team ? "team" : undefined}>{ESPN_ICON[label] ?? "🏀"} {label}</a>)}
-    </nav>
+      {SHORTCUTS.map(([label, href, kind]) => <a href={href} target="_blank" rel="noopener" data-espn={kind}>{ESPN_ICON[label] ?? "🏀"} {label}</a>)}
+    </nav>}
     <div class="ticker" id="ticker" hidden aria-label="NBA scores: today and last night"></div>
   </header>
   <main class="wrap">
@@ -106,7 +108,7 @@ const nav = [
   <footer class="wrap muted small">
     <nav class="espn-links" aria-label="Fantasy Shortcuts">
       <b>Fantasy Shortcuts ↗</b>
-      {SHORTCUTS.map(([label, href, team]) => <a href={href} target="_blank" rel="noopener" data-espn={team ? "team" : undefined}>{label}</a>)}
+      {SHORTCUTS.map(([label, href, kind]) => <a href={href} target="_blank" rel="noopener" data-espn={kind}>{label}</a>)}
     </nav>
     <p>ESPN runs the league. This site is for tiers, votes and fun. Votes are voluntary.</p>
     <p class="row"><button type="button" class="link" id="slime-toggle" hidden>Gutter slime: on</button></p>

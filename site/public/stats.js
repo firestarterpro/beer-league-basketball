@@ -10,6 +10,7 @@
   const cache = { season: data.rows };
   let rows = data.rows;
   let sort = null;                // { key, dir } from a header click; null = the "Rank by" order
+  const PATCH = { T1: "/img/ui/tier-t1.webp", T2: "/img/ui/tier-t2.webp", T3: "/img/ui/tier-t3.webp" };
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const get = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
   const put = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} };
@@ -75,7 +76,7 @@
     { key: "nba", label: "NBA", title: "NBA team", group: "Player info", text: true, val: (r) => r.nba || "FA", fmt: txt, dir: 1 },
     { key: "pos", label: "POS", title: "Positions", group: "Player info", text: true, val: (r) => (r.pos || []).join("/"), fmt: (v) => v || "–", dir: 1 },
     { key: "status", label: "HEALTH", title: "Injury status from ESPN", group: "Player info", text: true, html: true,
-      val: (r) => (hurt(r) ? r.status.replace(/_/g, " ") : ""), fmt: (v, r) => (v ? `<span class="st-hurt" title="${esc(injText(r))}">${esc(v)}</span>${injText(r) ? ` <span class="small">${esc(injText(r))}</span>` : ""}` : '<span class="muted">OK</span>'), dir: -1 },
+      val: (r) => (hurt(r) ? r.status.replace(/_/g, " ") : ""), fmt: (v, r) => (v ? `<span class="st-hurt" title="${esc(v)}">${esc(injText(r) || v)}</span>` : '<span class="muted">OK</span>'), dir: -1 },
     { key: "fp", label: "FPTS", title: "Fantasy points (total) under the chosen scoring", group: "Points", val: fp, fmt: f1, dir: -1 },
     { key: "fpg", label: "FP/G", title: "Fantasy points per game", group: "Points", val: (r) => (fp(r) != null && r.gp ? fp(r) / r.gp : null), fmt: f1, dir: -1 },
     { key: "fp7", label: "L7", title: "Fantasy points in the last 7 days", group: "Points", val: fp7, fmt: f1, dir: -1 },
@@ -307,12 +308,16 @@
     $("pt-body").innerHTML = list.map((r) => {
       const k = rankOf(r);
       const tierText = data.tierName[r.tier] || "";
-      const injured = hurt(r) ? ` <span class="st-hurt" title="${esc(injText(r) || r.status)}">${esc(r.status.replace(/_/g, " "))}</span>` : "";
+      // Injury text ("Left ankle · Back ~Oct 26") when ESPN gives it; the bare status (OUT, DAY TO DAY) only when it doesn't.
+      const inj = hurt(r) ? injText(r) : "";
+      const injured = hurt(r) ? ` <span class="st-hurt" title="${esc(r.status.replace(/_/g, " "))}">${esc(inj || r.status.replace(/_/g, " "))}</span>` : "";
+      const moved = r.prev_tier && r.prev_tier !== r.tier
+        ? `<span class="st-move ${r.prev_tier > r.tier ? "up" : "down"}">${r.prev_tier > r.tier ? "▲ Tier up" : "▼ Tier down"}</span>` : "";
       return `<tr${mine && r.team === mine ? ' class="mine"' : ""}>
         <th scope="row" class="who"><a href="/player/${encodeURIComponent(r.id)}">
           <span class="rk num">${k ?? "–"}</span>
-          ${face(r)}
-          <span class="nm"><b>${esc(r.name)}</b><span class="muted small"><span title="${esc(tierText)} · tier rank ${r.tier_rank ?? "–"}">${data.emoji[r.tier] || ""}</span> ${esc(r.nba || "FA")} · ${esc((r.pos || []).join("/") || "–")}${injured}</span></span>
+          <span class="st-badges"><img class="patch" src="${PATCH[r.tier] || PATCH.T3}" alt="${esc(tierText)}" title="${esc(tierText)} · tier rank ${r.tier_rank ?? "–"}${r.prev_tier && r.prev_tier !== r.tier ? ` (was ${esc(data.tierName[r.prev_tier] || r.prev_tier)})` : ""}" width="28" height="28" loading="lazy">${face(r)}${moved}</span>
+          <span class="nm"><b>${esc(r.name)}</b><span class="muted small">${esc(r.nba || "FA")} · ${esc((r.pos || []).join("/") || "–")}</span>${injured ? `<span class="small">${injured}</span>` : ""}</span>
         </a></th>
         ${cols.map((c) => { const d = COL[c.k]; const v = d.val(r);
           return `<td class="${d.cls || (d.text ? "" : "num")}"${wStyle(c)}>${d.html ? d.fmt(v, r) : esc(d.fmt(v, r))}</td>`; }).join("")}

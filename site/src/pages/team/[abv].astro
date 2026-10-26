@@ -3,7 +3,7 @@
 // the roster as tier patches; tap a patch for a yearbook signing. /team/flag, /team/stat, ...
 import Base from "../../layouts/Base.astro";
 import { one, query } from "../../lib/db";
-import { ESPN } from "../../lib/espn";
+import { ESPN, dayLabel } from "../../lib/espn";
 import { TIER_EMOJI, TIER_NAME } from "../../lib/tiers";
 import { NBA_INJURY_REPORT, TEAM_ART, avatarSrc, headshotSrc, injurySql, injuryText, isHurt, photoSql } from "../../lib/players";
 import { abvLabel, cardRows } from "../../lib/cards";
@@ -66,7 +66,10 @@ const hurtLine = (p: (typeof roster)[number]) => {
     </div>
     <div class="lh-links">
       <a class="rs-btn" href={`/stats?team=${team.team_id}`}>Team roster in Stats →</a>
+      {/* data-team keeps this team's number when team.js re-points lineup links each day. */}
+      <a class="espn-btn lineup-btn" data-espn="lineup" data-team={team.espn_team_id ?? undefined} href={ESPN.lineup(team.espn_team_id)} target="_blank" rel="noopener">📋 Set tomorrow's lineup · {dayLabel(1)} ↗</a>
       <a class="espn-btn" href={ESPN.team(team.espn_team_id)} target="_blank" rel="noopener">Team on ESPN ↗</a>
+      <a class="espn-btn" href={ESPN.rosters} target="_blank" rel="noopener">🔁 Rosters & trades ↗</a>
     </div>
   </section>
 

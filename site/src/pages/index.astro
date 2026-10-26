@@ -1,7 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import { query } from "../lib/db";
-import { ESPN } from "../lib/espn";
+import { ESPN, dayLabel } from "../lib/espn";
 import PetWall from "../components/PetWall.astro";
 import RuleSnippet from "../components/RuleSnippet.astro";
 import PowerSide from "../components/PowerSide.astro";
@@ -54,8 +54,17 @@ const scoringName = MODEL_NAME[S.scoring_model] ?? S.scoring_model ?? "the chose
 <Base title="Home" active="/" sides fonts="family=VT323&family=Silkscreen:wght@400;700">
 <div class="home-grid">
 <div class="home-main">
+  {/* Lineups lock at each day's first tip-off and ESPN opens on today, so this jumps straight to tomorrow (team.js sets the team and day). */}
+  <section class="card collapsible lineup-card" id="lineup">
+    <h2>Lineups</h2>
+    <div class="lineup-btns">
+      <a class="espn-btn lineup-btn" data-espn="lineup" href={ESPN.lineup()} target="_blank" rel="noopener"><span aria-hidden="true">📋</span>Set tomorrow's lineup · {dayLabel(1)} ↗</a>
+      <a class="espn-btn" href={ESPN.rosters} target="_blank" rel="noopener"><span aria-hidden="true">🔁</span>Rosters & trades ↗</a>
+    </div>
+    <p class="muted small">Lineups lock at each day's first tip-off, and ESPN opens on today. This button goes straight to tomorrow for the team you picked at the top.</p>
+  </section>
   <section class="card collapsible" id="alerts" hidden
-           data-links={JSON.stringify({ team: ESPN.team(), players: ESPN.players })}>
+           data-links={JSON.stringify({ team: ESPN.team(), players: ESPN.players, lineup: ESPN.lineup() })}>
     <h2>Heads up</h2>
     <ul class="alerts" id="alerts-list"></ul>
   </section>
