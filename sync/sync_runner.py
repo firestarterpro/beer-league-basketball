@@ -3,10 +3,13 @@
     python sync_runner.py tick                 # what Task Scheduler runs; usually does nothing
     python sync_runner.py status               # what ran last and what's next
     python sync_runner.py moves-every 15       # ESPN move checks: every 1 or 15 minutes
-    python sync_runner.py run nightly          # run a job by hand (nightly, postgame, stats, moves, quick)
+    python sync_runner.py run nightly          # run a job by hand (see JOBS: moves, quick, stats, ...)
     python sync_runner.py install              # print the Task Scheduler command
 
-Schedule (Central time):
+The website's Updates page (/updates) shows this schedule and the last run of each job. The LM
+can change the timings, pause a job, or ask for a Run now there; this PC picks it up within a minute.
+
+Default schedule (Central time):
   ESPN moves   checked every 1 or 15 min. ESPN is asked each time (free, Neon stays
                asleep); Neon is written only when a roster or transaction changed.
   Sync Now     the website button. Checked every minute when SITE_URL is set.
@@ -46,10 +49,18 @@ SCHEDULE_CACHE = CACHE / "schedule.json"
 TODAY_CACHE = CACHE / "today.json"
 PY = sys.executable
 
-STAT_EVERY = timedelta(minutes=17)
-POSTGAME_DELAY = timedelta(minutes=30)
-NIGHTLY_START, NIGHTLY_END = 6, 8          # hours, Central
+# The schedule the website's Updates page (/updates) can change. Its values win over these
+# (and over `moves-every` below); the PC picks them up at its next minute check.
+DEFAULTS = {"moves_every": 1,              # minutes between ESPN move checks
+            "stats_every": 17,             # minutes between stat runs while games are on
+            "postgame_delay": 30,          # minutes after the last game goes final
+            "nightly_hour": 6,             # morning run starts at this hour (Central), retried for 2 hours
+            "paused": []}                  # any of: moves, stats, postgame, nightly
+LIMITS = {"moves_every": (1, 60), "stats_every": (5, 60), "postgame_delay": (0, 180), "nightly_hour": (0, 10)}
+PAUSABLE = ("moves", "stats", "postgame", "nightly")
+NIGHTLY_HOURS = 2
 NIGHTLY_RETRY = timedelta(minutes=15)
+REPORT_EVERY = timedelta(minutes=15)       # heartbeat to the Updates page when nothing ran
 MAX_GAME_WINDOW = timedelta(hours=8)       # stop stat runs this long after the first tip, final or not
 LOCK_STALE = timedelta(minutes=45)
 FINAL = 3
@@ -67,7 +78,27 @@ JOBS = {
     "nightly":  [["espn_sync.py", "nightly"], ["nba_sync.py", "schedule"],     # morning: last night's games
                  ["nba_sync.py", "games", "--date", "{last_night}", "--new-only"], ["nba_sync.py", "link"],
                  "heat", ["backup_db.py"]],
+    # single pieces, for the Updates page's Run now buttons and `run` by hand
+    "schedule": [["nba_sync.py", "schedule"]],
+    "heat":     ["heat"],
+    "backup":   [["backup_db.py"]],
 }
+
+
+def clean_schedule(raw):
+    """Schedule values from the website, kept only when they make sense."""
+    out = {}
+    for key, (lo, hi) in LIMITS.items():
+        try:
+            value = int((raw or {}).get(key))
+        except (TypeError, ValueError):
+            continue
+        if lo <= value <= hi:
+            out[key] = value
+    paused = (raw or {}).get("paused")
+    if isinstance(paused, list):
+        out["paused"] = [j for j in PAUSABLE if j in paused]
+    return out
 
 
 # ---------------------------------------------------------------- state
@@ -130,9 +161,12 @@ def plan(now, state, tips, all_final, settings):
     state      dict of the last run times (see save_state)
     tips       tip times for the current slate (aware datetimes), empty on no-game days
     all_final  every game of the slate is final
-    settings   {"moves_every": minutes, "sync_now": requested-at iso string or None}
+    settings   DEFAULTS keys (missing ones use DEFAULTS), plus "sync_now": requested-at iso string
+               or None, and "run": {"job", "requested_at"} from the Updates page's Run now, or None
     Returns a list of (job, reason), plus the state keys to stamp, in a dict.
     """
+    settings = {**DEFAULTS, **settings}
+    paused = settings["paused"]
     now = now.astimezone(CENTRAL)
     slate = slate_date(now).isoformat()
     jobs, marks = [], {}
@@ -143,9 +177,16 @@ def plan(now, state, tips, all_final, settings):
         jobs.append(("quick", "Sync Now pressed on the website"))
         marks["sync_now_handled"] = requested
 
+    # Run now on the Updates page (runs even when that job's schedule is paused)
+    run = settings.get("run") or {}
+    if run.get("job") in JOBS and run.get("requested_at") and run["requested_at"] != state.get("run_handled"):
+        jobs.append((run["job"], "Run now on the Updates page"))
+        marks["run_handled"] = run["requested_at"]
+
     # ESPN moves (the job itself only writes when something changed)
     last = when(state, "moves_checked")
-    if not last or now - last >= timedelta(minutes=settings.get("moves_every", 1)) - timedelta(seconds=20):
+    if "moves" not in paused and (
+            not last or now - last >= timedelta(minutes=settings["moves_every"]) - timedelta(seconds=20)):
         jobs.append(("check_moves", "move check"))
         marks["moves_checked"] = now.isoformat()
 
@@ -155,9 +196,9 @@ def plan(now, state, tips, all_final, settings):
         first_tip = tips[0]
         in_window = first_tip <= now < first_tip + MAX_GAME_WINDOW
         finished = state.get("final_slate") == slate
-        if in_window and not finished:
+        if in_window and not finished and "stats" not in paused:
             last = when(state, "stats_run")
-            if not last or now - last >= STAT_EVERY - timedelta(seconds=20):
+            if not last or now - last >= timedelta(minutes=settings["stats_every"]) - timedelta(seconds=20):
                 jobs.append(("stats", "games in progress"))
                 marks["stats_run"] = now.isoformat()
             if all_final:
@@ -169,15 +210,18 @@ def plan(now, state, tips, all_final, settings):
 
     # Post-game: 30 minutes after the slate went final
     final_at = when(state, "final_at")
-    if (state.get("final_slate") == slate and final_at and now - final_at >= POSTGAME_DELAY
-            and state.get("postgame_slate") != slate):
-        jobs.append(("postgame", "30 min after the last game"))
+    delay = settings["postgame_delay"]
+    if (state.get("final_slate") == slate and final_at and now - final_at >= timedelta(minutes=delay)
+            and state.get("postgame_slate") != slate and "postgame" not in paused):
+        jobs.append(("postgame", f"{delay} min after the last game"))
         marks["postgame_slate"] = slate
 
-    # Nightly, 6-8am. Last night's slate is yesterday's game date.
+    # Nightly, 6-8am by default. Last night's slate is yesterday's game date.
     today = now.date().isoformat()
     last_night = (now.date() - timedelta(days=1)).isoformat()
-    if NIGHTLY_START <= now.hour < NIGHTLY_END and state.get("nightly_day") != today:
+    start = settings["nightly_hour"]
+    if (start <= now.hour < start + NIGHTLY_HOURS and state.get("nightly_day") != today
+            and "nightly" not in paused):
         if state.get("postgame_slate") == last_night:
             marks["nightly_day"] = today
             marks["nightly_skipped"] = "post-game run already covered last night"
@@ -261,8 +305,17 @@ def check_moves(now, state):
     if fingerprint != state.get("espn_fingerprint"):
         if state.get("espn_fingerprint"):
             log(now, "ESPN roster or transaction change seen")
-        if run_job(now, "moves", slate_date(now).isoformat()):
+        ok = run_job(now, "moves", slate_date(now).isoformat())
+        record(state, "moves", now, ok, "ESPN roster or transaction change")
+        if ok:
             state["espn_fingerprint"] = fingerprint   # on failure, retried at the next check
+        return True
+    return False
+
+
+def record(state, job, started, ok, why):
+    """Last run of each job, for `status` and the Updates page."""
+    state.setdefault("last_runs", {})[job] = {"at": started.isoformat(), "ok": ok, "why": why}
 
 
 def site_request(path, body=None):
@@ -276,14 +329,46 @@ def site_request(path, body=None):
         return json.loads(r.read() or b"{}")
 
 
-def sync_now_requested(now):
+def site_state(now):
+    """What the website holds: Sync Now presses, plus (v2 sites) the schedule and Run now requests."""
     try:
-        state = (site_request("/api/sync-now") or {}).get("data") or {}
-        requested, done = state.get("requested_at"), state.get("done_at")
-        return requested if requested and (not done or requested > done) else None
+        return (site_request("/api/sync-now") or {}).get("data") or {}
     except Exception as e:
         log(now, f"Sync Now check failed: {e!r}")
-        return None
+        return {}
+
+
+def sync_now_requested(site):
+    requested, done = site.get("requested_at"), site.get("done_at")
+    return requested if requested and (not done or requested > done) else None
+
+
+def current_settings(state, site):
+    """DEFAULTS, then `moves-every` from this PC, then the Updates page's schedule."""
+    return {**DEFAULTS, "moves_every": int(state.get("moves_every", DEFAULTS["moves_every"])),
+            **clean_schedule(site.get("schedule"))}
+
+
+def report(now, state, site, settings, force=False):
+    """Tell the Updates page what ran and when. Only a site that understands it (v2) gets it:
+    an older site would read the post as a Sync Now press. Sent when something ran, else every
+    15 minutes as a heartbeat (each one is a Cloudflare KV write, so not every minute)."""
+    if (site.get("v") or 0) < 2:
+        return
+    last = when(state, "reported_at")
+    if not force and last and now - last < REPORT_EVERY:
+        return
+    slate = slate_date(now)
+    status = {key: state.get(key) for key in ("last_runs", "moves_checked", "stats_run", "final_slate", "final_at",
+                                              "postgame_slate", "nightly_day", "nightly_skipped", "run_handled")}
+    status.update(seen_at=now.isoformat(), slate=slate.isoformat(), tips=[t.isoformat() for t in load_slate(slate)],
+                  all_final=slate_final(slate),
+                  schedule={k: settings[k] for k in DEFAULTS}, jobs=sorted(JOBS))
+    try:
+        site_request("/api/sync-now", {"status": status})
+        state["reported_at"] = now.isoformat()
+    except Exception as e:
+        log(now, f"Updates page report failed: {e!r}")
 
 
 def acquire_lock(now):
@@ -305,23 +390,29 @@ def tick():
     try:
         state = load_state()
         slate = slate_date(now)
-        settings = {"moves_every": int(state.get("moves_every", 1)), "sync_now": sync_now_requested(now)}
-        result = plan(now, state, load_slate(slate), slate_final(slate), settings)
+        site = site_state(now)
+        settings = current_settings(state, site)
+        result = plan(now, state, load_slate(slate), slate_final(slate),
+                      {**settings, "sync_now": sync_now_requested(site), "run": site.get("run")})
         # stamp first, so a crash in a job doesn't make it repeat every minute
         state.update(result["marks"])
         save_state(state)
+        ran = False
         for job, reason in result["jobs"]:
             if job == "check_moves":
-                check_moves(now, state)
+                ran = check_moves(now, state) or ran
                 continue
             log(now, f"{job}: {reason}")
+            started = datetime.now(CENTRAL)
             ok = run_job(now, job, result["slate"])
+            record(state, job, started, ok, reason)
+            ran = True
             if job == "nightly" and ok:
                 state["nightly_day"] = now.date().isoformat()
             if job == "quick":
                 try:
                     site_request("/api/sync-now", {"done_at": datetime.now(CENTRAL).isoformat(),
-                                                   "requested_at": settings["sync_now"], "ok": ok})
+                                                   "requested_at": sync_now_requested(site), "ok": ok})
                 except Exception as e:
                     log(now, f"Sync Now reply failed: {e!r}")
             if job == "stats":                    # the stats job refreshed today.json
@@ -329,6 +420,8 @@ def tick():
                     state["final_slate"] = result["slate"]
                     state["final_at"] = datetime.now(CENTRAL).isoformat()
             save_state(state)
+        report(datetime.now(CENTRAL), state, site, settings, force=ran or "run_handled" in result["marks"])
+        save_state(state)
     finally:
         LOCK_FILE.unlink(missing_ok=True)
 
@@ -340,10 +433,15 @@ def status():
     tips = load_slate(slate)
     print(f"now {now:%a %b %d %H:%M} Central; game date {slate}; "
           f"{len(tips)} games, first tip {tips[0]:%H:%M} " if tips else f"now {now:%H:%M}; no games on {slate}")
-    print(f"ESPN move checks every {state.get('moves_every', 1)} min")
+    s = current_settings(state, site_state(now))
+    print(f"ESPN move checks every {s['moves_every']} min; stats every {s['stats_every']} min during games; "
+          f"post-game {s['postgame_delay']} min after the last game; morning run from {s['nightly_hour']}:00"
+          + (f"; paused: {', '.join(s['paused'])}" if s["paused"] else ""))
     for key in ("moves_checked", "stats_run", "final_slate", "final_at", "postgame_slate", "nightly_day",
-                "nightly_tried", "nightly_skipped", "sync_now_handled"):
+                "nightly_tried", "nightly_skipped", "sync_now_handled", "run_handled"):
         print(f"  {key:17} {state.get(key, '-')}")
+    for job, last in sorted(state.get("last_runs", {}).items()):
+        print(f"  last {job:12} {last['at']}  {'ok' if last['ok'] else 'ERRORS'}  ({last['why']})")
 
 
 def main():
@@ -367,18 +465,26 @@ def main():
         state["moves_every"] = args.minutes
         save_state(state)
         print(f"ESPN move checks: every {args.minutes} min")
+        if "moves_every" in clean_schedule(site_state(datetime.now(CENTRAL)).get("schedule")):
+            print("Note: the Updates page has its own setting for this, and it wins. Change it there.")
     elif args.command == "run":
         now = datetime.now(CENTRAL)
         state = load_state()
         slate = slate_date(now)
         ok = run_job(now, args.job, slate.isoformat())
+        state = load_state()                      # the minute check may have saved while this ran
+        record(state, args.job, now, ok, "run by hand")
         # a manual run after the last game counts as the post-game run, so the 6am run is skipped
         final_at = when(state, "final_at")
+        site = site_state(now)
+        settings = current_settings(state, site)
         if args.job in ("postgame", "nightly") and ok:
-            if state.get("final_slate") == slate.isoformat() and final_at and now - final_at >= POSTGAME_DELAY:
+            if (state.get("final_slate") == slate.isoformat() and final_at
+                    and now - final_at >= timedelta(minutes=settings["postgame_delay"])):
                 state["postgame_slate"] = slate.isoformat()
             if args.job == "nightly":
                 state["nightly_day"] = now.date().isoformat()
+        report(datetime.now(CENTRAL), state, site, settings, force=True)
         save_state(state)
         print(f"{args.job}: {'done' if ok else 'finished with errors'} (details in {log_path(now)})")
     elif args.command == "install":

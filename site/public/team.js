@@ -76,7 +76,7 @@
       const waiting = s.requested_at && (!s.done_at || s.requested_at > s.done_at);
       btn.disabled = !!waiting;
       label.textContent = waiting ? `Asked ${time(s.requested_at)}, waiting on the LM's PC`
-        : s.done_at ? `Last synced ${time(s.done_at)}${s.ok === false ? " (with errors)" : ""}` : "";
+        : s.done_at ? `Last synced ${time(s.done_at)}${s.ok === false ? " (with errors)" : ""}` : "Updates";
       return waiting;
     };
     const check = () => fetch("/api/sync-now").then((r) => r.json()).then((out) => {

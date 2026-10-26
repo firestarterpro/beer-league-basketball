@@ -107,6 +107,41 @@ def main():
     check("stuck game: stat runs stop after 8 hours", stats[-1] < "11 03:00", stats[-1])
     check("stuck game: post-game still runs", post == ["11 03:30"], ", ".join(post))
 
+    # Updates page: changed timings, paused jobs, Run now
+    tips = [at(12, "18:00")]
+    state = {"nightly_day": "2026-11-12"}
+    ran = run_day(state, tips, at(12, "21:00"), at(12, "17:00"), at(13, "09:00"),
+                  settings={"moves_every": 15, "stats_every": 30, "postgame_delay": 60})
+    stats = [t for t, j in ran if j == "stats"]
+    post = [t for t, j in ran if j == "postgame"]
+    check("stats every 30 min when set", stats[:3] == ["12 18:00", "12 18:30", "12 19:00"], ", ".join(stats[:3]))
+    check("post-game 60 min after when set", post == ["12 22:00"], ", ".join(post))
+
+    state = {"nightly_day": "2026-11-13"}
+    ran = run_day(state, [at(13, "18:00")], at(13, "21:00"), at(13, "17:00"), at(14, "09:00"),
+                  settings={"moves_every": 15, "paused": ["stats", "postgame"]})
+    check("paused stats and post-game don't run", not any(j in ("stats", "postgame") for _, j in ran),
+          ", ".join(j for _, j in ran))
+    check("morning run still covers a paused post-game", [j for _, j in ran] == ["nightly"], ", ".join(t for t, _ in ran))
+
+    state = {"nightly_day": "2026-11-13"}
+    ran = run_day(state, [], None, at(14, "05:00"), at(14, "10:00"), settings={"moves_every": 15, "nightly_hour": 8})
+    check("morning run starts at the set hour", [t for t, j in ran if j == "nightly"] == ["14 08:00"])
+
+    state = {}
+    res = r.plan(at(15, "12:00"), state, [], False, {"moves_every": 15, "paused": ["moves"]})
+    check("paused move checks don't run", "check_moves" not in jobs(res))
+    req = {"job": "heat", "requested_at": "2026-11-15T18:00:00Z"}
+    first = r.plan(at(15, "12:00"), state, [], False, {"paused": ["moves"], "run": req})
+    state.update(first["marks"])
+    again = r.plan(at(15, "12:01"), state, [], False, {"paused": ["moves"], "run": req})
+    check("Run now runs once per press", jobs(first) == ["heat"] and jobs(again) == [])
+    odd = r.plan(at(15, "12:00"), {}, [], False, {"run": {"job": "rm -rf", "requested_at": "x"}, "paused": ["moves"]})
+    check("Run now ignores unknown jobs", jobs(odd) == [])
+    check("bad schedule values are dropped",
+          r.clean_schedule({"stats_every": "2", "postgame_delay": "45", "paused": ["stats", "nope"], "moves_every": None})
+          == {"postgame_delay": 45, "paused": ["stats"]})
+
     print(f"{sum(results)} passed, {len(results) - sum(results)} failed")
 
 

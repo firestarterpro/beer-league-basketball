@@ -1,0 +1,75 @@
+---
+// Updates: what the LM's PC syncs and when, the last run of each, and (LM) the schedule, Run now
+// and the PowerShell to run one by hand. Reached from "Last synced" in the header.
+// The PC reads the schedule and Run now from /api/sync-now every minute (KV, not Neon).
+import Base from "../layouts/Base.astro";
+import { isLM } from "../lib/lm-auth";
+import { PS_STATUS, SCHEDULE_FIELDS, SYNC_JOBS, psCommand } from "../lib/sync-jobs";
+
+const lm = await isLM(Astro.request);
+Astro.response.headers.set("cache-control", "private, no-store");
+---
+<Base title="Updates">
+  <section class="card">
+    <h1>Updates</h1>
+    <p class="muted">The league's data comes from ESPN and NBA.com. The LM's PC pulls it on the schedule below and writes it
+      to the database; this page shows what ran and when. Times are Central.</p>
+    <p id="pc-seen" class="pill">Checking on the LM's PC…</p>
+    {!lm && <p class="muted small">The LM can change the schedule and run any update from here after{" "}
+      <a href="/lm-login?next=/updates">entering the LM passcode</a>.</p>}
+  </section>
+
+  <section class="card">
+    <h2>What runs when</h2>
+    <div class="tablebox">
+      <table class="updates-table">
+        <thead><tr><th>Update</th><th>Schedule</th><th>Last run</th>{lm && <th></th>}</tr></thead>
+        <tbody>
+          {SYNC_JOBS.map((j) => (
+            <tr data-job={j.key}>
+              <td><b>{j.name}</b><br><span class="muted small">{j.what}</span></td>
+              <td><span class="js-when" data-template={j.when}>{j.when}</span><span class="js-paused pill" hidden>Paused</span></td>
+              <td class="js-last muted">–</td>
+              {lm && <td><button type="button" class="js-run" data-job={j.key}>Run now</button></td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <p id="slate" class="muted small"></p>
+  </section>
+
+  {lm && (
+    <section class="card">
+      <h2>Change the schedule</h2>
+      <p class="muted small">Saved here, picked up by the PC within a minute. Leave a box empty for the default.</p>
+      <form id="schedule-form" class="stack">
+        <div class="row">
+          {SCHEDULE_FIELDS.map((f) => (
+            <label>{f.label} <input name={f.key} type="number" min={f.min} max={f.max} step="1" placeholder={String(f.def)} style="width:5em"></label>
+          ))}
+        </div>
+        <div class="row">
+          <span>Pause:</span>
+          {SYNC_JOBS.filter((j) => j.pausable).map((j) => <label><input type="checkbox" name="paused" value={j.key}> {j.name}</label>)}
+        </div>
+        <div class="row"><button type="submit">Save schedule</button><button type="button" id="schedule-reset">Back to defaults</button></div>
+      </form>
+    </section>
+  )}
+
+  {lm && (
+    <section class="card">
+      <h2>Run one by hand on the PC</h2>
+      <p class="muted small">In PowerShell on the LM's PC. Output goes to <code>sync\logs\runner-&lt;date&gt;.log</code>.</p>
+      <label>Update <select id="ps-job">{SYNC_JOBS.map((j) => <option value={j.key}>{j.name}</option>)}</select></label>
+      <pre id="ps-code" class="ps-code">{psCommand(SYNC_JOBS[0].key)}</pre>
+      <button type="button" id="ps-copy">Copy</button>
+      <p class="muted small">See the schedule and last runs from the PC itself:</p>
+      <pre class="ps-code">{PS_STATUS}</pre>
+      <script type="application/json" id="ps-commands" set:html={JSON.stringify(Object.fromEntries(SYNC_JOBS.map((j) => [j.key, psCommand(j.key)])))} />
+    </section>
+  )}
+
+  <script is:inline src="/updates.js"></script>
+</Base>

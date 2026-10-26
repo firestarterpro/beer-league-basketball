@@ -30,6 +30,12 @@ header { background: var(--head-paint, var(--head-bg)); color: var(--head-ink); 
 .head-pickers select { width: 190px; padding: 3px 6px; font-size: 14px; }
 /* Sync: the button with "Last synced" right under it. */
 .sync { display: flex; flex-direction: column; gap: 2px; align-items: center; font-size: 12px; line-height: 1.2; color: var(--head-muted); text-align: center; }
+.sync a { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
+.sync a:hover { color: var(--head-ink); }
+/* Updates page */
+.updates-table td { vertical-align: top; }
+.updates-table .js-paused { margin-left: 6px; }
+.ps-code { white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px 10px; border: 1px solid currentColor; border-radius: 6px; font-size: 13px; }
 /* Nav: page buttons stacked in a grid, like the ESPN buttons. */
 .nav-btns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; flex: 1 1 520px; max-width: 720px; }
 .nav-btns a { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 34px; padding: 4px 8px; border-radius: 8px;
