@@ -44,3 +44,22 @@ export const ESPN_ICON: Record<string, string> = {
   "Set tomorrow's lineup": "📋", "Rosters & trades": "🔁", "My team": "👕", "League home": "🏠", "Add players": "➕", FantasyCast: "📺", Standings: "🏆", "Recent activity": "🔔",
   "Daily leaders": "🔥", "Waiver order": "⏳", "Draft room": "🎯",
 };
+
+// Which shortcuts each page shows (Jason 2026-10-26): Home has them all; every other page only the ones that fit it.
+// Longest matching path wins; a path ending in / covers every page under it.
+export const PAGE_SHORTCUTS: [path: string, labels: string[]][] = [
+  ["/stats", ["Set tomorrow's lineup", "Add players", "Rosters & trades", "Daily leaders"]],
+  ["/player/", ["Set tomorrow's lineup", "Add players", "Rosters & trades", "Daily leaders"]],
+  ["/team/", ["Set tomorrow's lineup", "My team", "Rosters & trades", "Standings"]],
+  ["/draft", ["Draft room", "Rosters & trades"]],
+  ["/rules", ["League home", "Standings", "Waiver order"]],
+  ["/approvals", ["Set tomorrow's lineup", "My team", "Add players", "Waiver order", "Recent activity"]],
+  ["/dashboards", ["Standings", "Recent activity", "FantasyCast", "Daily leaders"]],
+  ["/updates", ["Recent activity"]],
+];
+export function shortcutsFor(path: string) {
+  const clean = path.length > 1 ? path.replace(/\/+$/, "") : path;
+  if (clean === "/") return SHORTCUTS;
+  const hit = PAGE_SHORTCUTS.filter(([p]) => (p.endsWith("/") ? clean.startsWith(p) : clean === p)).sort((a, b) => b[0].length - a[0].length)[0];
+  return hit ? SHORTCUTS.filter(([label]) => hit[1].includes(label)) : [];
+}

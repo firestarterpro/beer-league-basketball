@@ -3,7 +3,7 @@
 // his total, and the points standings 2 above and 2 below him. ?model= and ?split= switch views.
 import Base from "../../layouts/Base.astro";
 import { query } from "../../lib/db";
-import { ESPN, dayLabel } from "../../lib/espn";
+import { ESPN } from "../../lib/espn";
 import { TIER_EMOJI, TIER_NAME } from "../../lib/tiers";
 import {
   HEAT, HEAT_NAME, MODEL_NAME, NBA_INJURY_REPORT, SPLITS, SPLIT_NAME, avatarSrc, asSplit, formula, headshotSrc, injuryText,
@@ -52,10 +52,8 @@ const moveText = (now: number, before?: number | null) =>
 const tierMove = p.prev_tier && p.prev_tier !== tier ? (p.prev_tier > tier ? "Moved up a tier" : "Dropped a tier") : null;
 const q = (m: string, s: string) => `?model=${m}&split=${s}`;
 ---
-<Base title={p.name} active="/stats" shortcuts={false}>
-  <p class="small row espn-line"><a href="/stats">← Back to Stats</a>
-    <a data-espn="lineup" href={ESPN.lineup()} target="_blank" rel="noopener">📋 Set tomorrow's lineup ({dayLabel(1)}) ↗</a>
-    <a href={ESPN.rosters} target="_blank" rel="noopener">🔁 Rosters & trades ↗</a></p>
+<Base title={p.name} active="/stats">
+  <p class="small"><a href="/stats">← Back to Stats</a></p>
 
   {/* Compact top (Jason 2026-10-26): photo, name, tier and the numbers in a few short rows, so the sections below show without scrolling. */}
   <article class={`pcard pcard-compact pcard-${tier.toLowerCase()}`}>
