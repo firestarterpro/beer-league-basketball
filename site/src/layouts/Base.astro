@@ -106,10 +106,10 @@ const nav = [
         </div>}
   </main>
   <footer class="wrap muted small">
-    <nav class="espn-links" aria-label="Fantasy Shortcuts">
+    {shortcuts && <nav class="espn-links" aria-label="Fantasy Shortcuts">
       <b>Fantasy Shortcuts ↗</b>
       {SHORTCUTS.map(([label, href, kind]) => <a href={href} target="_blank" rel="noopener" data-espn={kind}>{label}</a>)}
-    </nav>
+    </nav>}
     <p>ESPN runs the league. This site is for tiers, votes and fun. Votes are voluntary.</p>
     <p class="row"><button type="button" class="link" id="slime-toggle" hidden>Gutter slime: on</button></p>
   </footer>

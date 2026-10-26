@@ -408,3 +408,24 @@ dialog.pick-team::backdrop { background: rgb(0 0 0 / .6); }
 .lineup-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .lineup-btns .espn-btn { flex: 0 1 auto; }
 .espn-btn.lineup-btn { background: var(--accent); color: var(--accent-ink); font-size: 17px; padding: 12px 16px; }
+/* Player card, compact top: small photo and medal, the total and per-game box side by side. */
+.espn-line { gap: 6px 16px; }
+.pcard-compact { padding: 12px 14px; gap: 10px; border-width: 4px; }
+.pcard-compact .pcard-top { gap: 10px 14px; flex-wrap: nowrap; align-items: flex-start; }
+.pcard-compact .pcard-face { width: 96px; border-width: 1px; }
+.pcard-compact .pcard-name { gap: 2px; }
+.pcard-compact .pcard-name h1 { font-size: clamp(22px, 5vw, 30px); }
+.pcard-compact .pcard-tier { font-size: 13px; gap: 2px; }
+.pcard-compact .pcard-owner img { width: 32px; height: 32px; }
+.pcard-nums { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.pcard-compact .pcard-total { padding: 6px 10px; gap: 10px; }
+.pcard-compact .pcard-total .big { font-size: clamp(30px, 7vw, 40px); }
+.pcard-compact .pcard-box { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 4px; }
+.pcard-compact .pcard-box div { padding: 3px 6px; }
+.pcard-compact .pcard-box b { font-size: 16px; }
+@media (max-width: 640px) {
+  .pcard-compact .pcard-top { flex-wrap: wrap; }
+  .pcard-compact .pcard-face { width: 72px; }
+  .pcard-nums { grid-template-columns: 1fr; }
+}
+.inj-line .inj-what { color: var(--bad); }
