@@ -1,0 +1,142 @@
+---
+// Stats: every player in one sortable table. Rank by tier rank, league fantasy points or any power ranking;
+// filter by team (any of the 7 rosters), position, tier, NBA team, games, minutes, injuries and stat minimums.
+// Advanced settings: show, hide, rename, reorder and resize columns, and save views everyone can use.
+// No glowing rows or badges here, so the table scrolls easily. Logic in public/stats.js.
+import Base from "../layouts/Base.astro";
+import RankingsExplainer from "../components/RankingsExplainer.astro";
+import ScoringExplainer from "../components/ScoringExplainer.astro";
+import { query } from "../lib/db";
+import { ESPN } from "../lib/espn";
+import { TIER_EMOJI, TIER_NAME } from "../lib/tiers";
+import { HEAT, HEAT_NAME, MODEL_NAME, SPLITS, SPLIT_NAME, TIER_SOURCE_NAME, leagueModel, playerRows, tierInfo } from "../lib/players";
+
+const [info, rows, model, models, teams] = await Promise.all([
+  tierInfo(),
+  playerRows("season"),
+  leagueModel(),
+  query(`SELECT DISTINCT model_key FROM scoring_models ORDER BY model_key`),
+  query(`SELECT team_id AS id, team_name AS name FROM teams WHERE active ORDER BY team_name`),
+]);
+const snap = info.snapshot;
+const fmtDate = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { dateStyle: "medium" });
+const tierLabel = snap ? `Tier rank (${snap.source === "espn" ? "ESPN" : HEAT_NAME[snap.source] ?? "power ranking"})` : "Tier rank";
+const data = { rows, model, heatName: HEAT_NAME, emoji: TIER_EMOJI, tierName: TIER_NAME, t1: info.t1, t2: info.t2,
+  prevVersion: snap?.prev_version ?? null };
+---
+<Base title="Stats" active="/stats" sides>
+<section class="stats-page stack" id="stats">
+  <div class="sec-head">
+    <h1>Stats</h1>
+    <a class="small" href={ESPN.players} target="_blank" rel="noopener">Add players in ESPN ↗</a>
+  </div>
+  <p class="small muted">
+    {TIER_EMOJI.T1} Tier 1 = ranks 1–{info.t1} (max {info.cap1} per team) · {TIER_EMOJI.T2} Tier 2 = ranks {info.t1 + 1}–{info.t2} (max {info.cap2}) · {TIER_EMOJI.T3} Tier 3 = the rest.{" "}
+    {snap
+      ? <>Tier snapshot v{snap.version} from {TIER_SOURCE_NAME[snap.source] ?? snap.source}, in effect since {fmtDate(snap.effective_date)}, refreshes every {info.weeks} weeks. IR doesn't count toward the caps. Tap a player for his card.</>
+      : <>The tier list shows up once the LM freezes the first tier snapshot.</>}
+  </p>
+  <details class="explain-wrap">
+    <summary class="small">How scoring and the rankings work</summary>
+    <div class="stack"><RankingsExplainer /><ScoringExplainer /></div>
+  </details>
+
+  {rows.length > 0 && (
+    <>
+      <div class="row st-controls" id="pt-controls">
+        <label class="ctl">Rank by
+          <select id="pt-view">
+            <option value="tier">{tierLabel}</option>
+            <option value="points">League points</option>
+            {HEAT.map((k) => <option value={k}>{HEAT_NAME[k]}</option>)}
+          </select>
+        </label>
+        <label class="ctl">Scoring
+          <select id="pt-model">
+            {models.map((m) => <option value={m.model_key} selected={m.model_key === model}>{MODEL_NAME[m.model_key] ?? m.model_key}{m.model_key === model ? " (league)" : ""}</option>)}
+          </select>
+        </label>
+        <label class="ctl">Stats from
+          <select id="pt-split">{SPLITS.map((s) => <option value={s}>{SPLIT_NAME[s]}</option>)}</select>
+        </label>
+        <label class="ctl">Show
+          <select id="pt-show">
+            <option value="all">Everyone</option>
+            <option value="free">Free agents only</option>
+            <option value="mine">My team only</option>
+            <optgroup label="Team rosters">
+              {teams.map((t) => <option value={`team:${t.id}`}>{t.name}</option>)}
+            </optgroup>
+            <option value="top50">Top 50 only</option>
+            <option value="movers">Biggest movers</option>
+          </select>
+        </label>
+        <select id="pt-pos" aria-label="Position">
+          <option value="">All positions</option>
+          {["PG", "SG", "SF", "PF", "C"].map((p) => <option>{p}</option>)}
+        </select>
+        <input type="search" id="pt-search" placeholder="Find a player" aria-label="Find a player">
+        <label class="ctl"><input type="checkbox" id="pt-pergame" checked> Per game</label>
+        <button type="button" id="st-adv-btn" aria-expanded="false" aria-controls="st-adv">⚙ Advanced settings</button>
+      </div>
+
+      <div class="st-adv stack" id="st-adv" hidden>
+        <fieldset class="st-box">
+          <legend>Views</legend>
+          <div class="row">
+            <label class="ctl">View
+              <select id="st-view-pick"><option value="">Site default</option></select>
+            </label>
+            <button type="button" id="st-view-load">Use it</button>
+            <button type="button" id="st-view-default">Make it my default</button>
+            <button type="button" id="st-view-del" hidden>Delete</button>
+          </div>
+          <div class="row">
+            <input id="st-view-name" maxlength="40" placeholder="Name this view" aria-label="View name">
+            <button type="button" class="primary" id="st-view-save">Save current view</button>
+            <button type="button" id="st-reset">Back to the site's default view</button>
+          </div>
+          <p class="muted small" id="st-view-note">Saved views are shared: everyone can see and use them. Only the device that saved a view can delete it, and a copy someone else saved stays.</p>
+        </fieldset>
+        <fieldset class="st-box">
+          <legend>More filters</legend>
+          <div class="row">
+            <label class="ctl">Tier
+              <select id="f-tier"><option value="">All tiers</option><option value="T1">{TIER_EMOJI.T1} Tier 1</option><option value="T2">{TIER_EMOJI.T2} Tier 2</option><option value="T3">{TIER_EMOJI.T3} Tier 3</option></select>
+            </label>
+            <label class="ctl">NBA team <select id="f-nba"><option value="">All NBA teams</option></select></label>
+            <label class="ctl">Games ≥ <input type="number" id="f-gp" min="0" step="1" inputmode="numeric" class="st-num"></label>
+            <label class="ctl">Minutes/game ≥ <input type="number" id="f-min" min="0" step="1" inputmode="decimal" class="st-num"></label>
+            <label class="ctl">Health
+              <select id="f-inj"><option value="">Everyone</option><option value="healthy">Healthy only</option><option value="hurt">Injured only</option></select>
+            </label>
+          </div>
+          <div class="stack" id="f-stats"></div>
+          <div class="row">
+            <button type="button" id="f-stat-add">＋ Add a stat minimum</button>
+            <button type="button" class="link" id="f-clear">Clear filters</button>
+          </div>
+        </fieldset>
+        <fieldset class="st-box">
+          <legend>Columns</legend>
+          <p class="muted small">Tick to show, type a new name, use ↑ ↓ to move, and set a width (or drag a column's right edge in the table).</p>
+          <ol class="st-cols" id="st-cols"></ol>
+        </fieldset>
+      </div>
+
+      <p class="muted small" id="pt-count" aria-live="polite">{rows.length} players</p>
+      <div class="tablebox pt-box">
+        <table class="pt st-table" id="pt">
+          <colgroup id="pt-colgroup"></colgroup>
+          <thead><tr id="pt-head"></tr></thead>
+          <tbody id="pt-body"></tbody>
+        </table>
+      </div>
+      <p class="muted" id="pt-empty" hidden>No players match.</p>
+      <p class="muted small" id="pt-note"></p>
+    </>
+  )}
+</section>
+  <script is:inline type="application/json" id="pt-data" set:html={JSON.stringify(data).replace(/</g, "\\u003c")}></script>
+  <script is:inline src="/stats.js"></script>
+</Base>

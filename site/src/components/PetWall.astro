@@ -16,9 +16,18 @@ const [rows, settings] = await Promise.all([
 ]).catch(() => [[], undefined] as const);
 const data = JSON.stringify({ rows, overrides: settings?.overrides ?? {} });
 ---
-<section class="card" id="gp-wall-card" hidden>
+<section class="card collapsible" id="gp-wall-card" hidden>
   <h2>Masco-Pets</h2>
-  <p class="muted small">Every team's masco-pet. Tap one to visit and play (practice only, nothing saves). 🔥 On Fire · 🌟 Super Saiyan · both = Superman fire mode · 🏀/w = average points per week (each week the top scorer gets +25 bonus, last +10). Rings around the pet screen show how close it is to 🔥 and 🌟.</p>
-  <div class="gp-wall" id="gp-wall" data-pets={data}></div>
+  {/* pet-wall.js fills #gp-wall with the 7 mascots; it's display: contents, so the key card takes the 8th spot in the grid. */}
+  <div class="gp-wall-grid">
+    <div class="gp-wall" id="gp-wall" data-pets={data}></div>
+    <div class="gp-key small">
+      <b>How pets work</b>
+      <p>Tap a pet to visit and play (practice only, nothing saves).</p>
+      <p>🔥 On Fire · 🌟 Super Saiyan · both = Superman fire mode.</p>
+      <p>🏀/w = average points per week. Each week the top scorer gets +25 bonus, last +10.</p>
+      <p>Rings around the pet screen show how close it is to 🔥 and 🌟.</p>
+    </div>
+  </div>
 </section>
 <script is:inline src="/pet/pet-wall.js" defer></script>

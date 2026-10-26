@@ -1,23 +1,26 @@
 ---
 // Shared page frame: header, nav, team picker. Every page uses it.
 import { query } from "../lib/db";
-import { SHORTCUTS } from "../lib/espn";
+import { ESPN_ICON, SHORTCUTS } from "../lib/espn";
 import GigaPet from "../components/GigaPet.astro";
-import EspnCard from "../components/EspnCard.astro";
+import ActivePoll from "../components/ActivePoll.astro";
+import { openPolls } from "../lib/polls";
 import { THEMES, themeFor, themeName } from "../lib/themes";
 
-// sides: the page lays out its own side columns (Home; Tiers adds its own ESPN column). Every other page gets an ESPN column.
+// sides: the page lays out its own side columns (Home). Every other page gets a side column only while a poll is open.
 // fonts: extra Google Fonts a page's toys use (css2 query, e.g. "family=VT323").
 interface Props { title: string; active?: string; sides?: boolean; fonts?: string }
 const { title, active = "", sides = false, fonts: pageFonts = "" } = Astro.props;
 // Every page has its own theme; a visitor's pick in the theme bar (bl.theme on their device) wins over it.
 const pageTheme = themeFor(Astro.url.pathname);
 const themeFonts = Object.fromEntries(THEMES.map((t) => [t.key, t.fonts]));
-const teams = await query<{ team_id: string; team_name: string; espn_team_id: number | null }>(
-  "SELECT team_id, team_name, espn_team_id FROM teams WHERE active ORDER BY team_name");
+const [teams, polls] = await Promise.all([
+  query<{ team_id: string; team_name: string; espn_team_id: number | null }>(
+    "SELECT team_id, team_name, espn_team_id FROM teams WHERE active ORDER BY team_name"),
+  sides ? [] : openPolls(),
+]);
 const nav = [
-  ["/", "Home"], ["/tiers", "Tiers"], ["/practice-draft", "Practice draft"], ["/rules", "Rules"], ["/polls", "Polls"], ["/approvals", "Approvals"],
-  ["/actions", "Action requests"], ["/dashboards", "Dashboards"],
+  ["/", "Home"], ["/stats", "Stats"], ["/draft", "Draft"], ["/rules", "Rules"], ["/approvals", "Approvals & requests"], ["/dashboards", "Dashboards"],
 ];
 ---
 <!doctype html>
@@ -85,14 +88,19 @@ const nav = [
         <GigaPet />
       </div>
     </div>
+    {/* Fantasy Shortcuts: ESPN links in the header bar on every page. */}
+    <nav class="wrap shortcut-bar" aria-label="Fantasy Shortcuts">
+      <b>ESPN ↗</b>
+      {SHORTCUTS.map(([label, href, team]) => <a href={href} target="_blank" rel="noopener" data-espn={team ? "team" : undefined}>{ESPN_ICON[label] ?? "🏀"} {label}</a>)}
+    </nav>
     <div class="ticker" id="ticker" hidden aria-label="NBA scores: today and last night"></div>
   </header>
   <main class="wrap">
-    {sides
+    {sides || polls.length === 0
       ? <slot />
       : <div class="page-grid">
           <div class="page-main"><slot /></div>
-          <aside class="page-side" aria-label="Fantasy Shortcuts"><EspnCard /></aside>
+          <aside class="page-side" aria-label="Open poll"><ActivePoll polls={polls} /></aside>
         </div>}
   </main>
   <footer class="wrap muted small">

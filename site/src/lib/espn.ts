@@ -18,9 +18,14 @@ export const ESPN = {
   rosters: `${base}/league/rosters?leagueId=${LEAGUE_ID}`,
 };
 
-// "Fantasy Shortcuts": the button card on every page and the link row at the bottom.
+// "Fantasy Shortcuts": the link bar in the header and the link row at the bottom.
 export const SHORTCUTS: [string, string, boolean?][] = [
   ["My team", ESPN.team(), true], ["League home", ESPN.league], ["Add players", ESPN.players], ["FantasyCast", ESPN.fantasycast],
   ["Standings", ESPN.standings], ["Recent activity", ESPN.activity], ["Daily leaders", ESPN.leaders],
   ["Waiver order", ESPN.waivers], ["Draft room", ESPN.draft],
 ];
+
+export const ESPN_ICON: Record<string, string> = {
+  "My team": "👕", "League home": "🏠", "Add players": "➕", FantasyCast: "📺", Standings: "🏆", "Recent activity": "🔔",
+  "Daily leaders": "🔥", "Waiver order": "📋", "Draft room": "🎯",
+};

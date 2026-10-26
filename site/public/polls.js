@@ -4,6 +4,9 @@
 // the noses vote the moment you press one: Yes honks and slimes, No buzzes (#13).
 // Your last ballot on this device is filled back in (bl.ballot.<poll id>); nothing about it goes to the server.
 document.addEventListener("DOMContentLoaded", function () {
+  // A page can include this twice (side-column poll + Approvals); wire the forms once.
+  if (window.BL_POLLS_WIRED) return;
+  window.BL_POLLS_WIRED = true;
   const sfx = (n) => BL.sfx && BL.sfx(n);
   const calm = () => (BL.calm ? BL.calm() : false);
   const store = {

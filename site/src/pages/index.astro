@@ -50,20 +50,34 @@ const tierSource = info.snapshot
       : TIER_SOURCE_NAME[info.snapshot.source] ?? info.snapshot.source)
   : "the commissioner's power ranking";
 const scoringName = MODEL_NAME[S.scoring_model] ?? S.scoring_model ?? "the chosen model";
-const draftLine = S.draft_type === "salary_cap"
-  ? `Auction with a $${S.draft_budget} cap per team, ${S.keepers === "off" ? "no keepers" : S.keepers}.`
-  : "An auction draft.";
 ---
 <Base title="Home" active="/" sides fonts="family=VT323&family=Silkscreen:wght@400;700">
 <div class="home-grid">
 <div class="home-main">
-  <section class="card closable" id="alerts" hidden
-           data-links={JSON.stringify({ team: ESPN.team(), players: ESPN.players, practice: "/practice-draft" })}>
+  <section class="card collapsible" id="alerts" hidden
+           data-links={JSON.stringify({ team: ESPN.team(), players: ESPN.players })}>
     <h2>Heads up</h2>
     <ul class="alerts" id="alerts-list"></ul>
   </section>
+  <section class="card collapsible" id="upcoming">
+    <h2>Upcoming games</h2>
+    <p class="muted small" id="upcoming-sub">Pick your team at the top to see its games.</p>
+    <div class="tv">
+      <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Game days"></div>
+      <div class="tv-set">
+        <div class="tv-screen">
+          <p class="tv-label" aria-hidden="true"><span>Upcoming games</span><span class="rec">● REC</span></p>
+          <div id="upcoming-days" class="stack"></div>
+        </div>
+        <span class="tv-knobs" aria-hidden="true"></span>
+      </div>
+    </div>
+    <RuleSnippet title="Lineups" href="/rules#roster" icon="⏰" cta="Roster rules">
+      Set your lineup before each day's first game: it locks at that tip-off. {Number(S.ir_slots) || 2} IR spots, no bench.
+    </RuleSnippet>
+  </section>
   <PetWall />
-  <section class="card closable" id="league">
+  <section class="card collapsible" id="league">
     <div class="sec-head">
       <h2>The league</h2>
       <a class="rs-btn" href="/rules">All league rules →</a>
@@ -90,73 +104,46 @@ const draftLine = S.draft_type === "salary_cap"
         Players are ranked {TIER_EMOJI.T1} 1–{info.t1}, {TIER_EMOJI.T2} {info.t1 + 1}–{info.t2}, {TIER_EMOJI.T3} the rest.
         A team can hold at most {info.cap1} of each capped tier. Ranked by {tierSource}.
       </RuleSnippet>
-      <RuleSnippet title="The draft" href="/rules#draft" icon="🏀" cta="Draft rules">
-        {draftLine} Try it against the computer at the <a href="/practice-draft">practice draft</a>.
-      </RuleSnippet>
       <RuleSnippet title="Scoring" href="/rules#scoring" icon="📊" cta="Scoring details">
         Season-long points, no head-to-head and no playoffs. The league voted for {scoringName} scoring.
       </RuleSnippet>
     </div>
   </section>
   <div class="grid">
-    <section class="card closable" id="upcoming">
-      <h2>Upcoming games</h2>
-      <p class="muted small" id="upcoming-sub">Pick your team at the top to see its games.</p>
-      <div class="tv">
-        <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Game days"></div>
-        <div class="tv-set">
-          <div class="tv-screen">
-            <p class="tv-label" aria-hidden="true"><span>Upcoming games</span><span class="rec">● REC</span></p>
-            <div id="upcoming-days" class="stack"></div>
-          </div>
-          <span class="tv-knobs" aria-hidden="true"></span>
-        </div>
-      </div>
-      <RuleSnippet title="Lineups" href="/rules#roster" icon="⏰" cta="Roster rules">
-        Set your lineup before each day's first game: it locks at that tip-off. {Number(S.ir_slots) || 2} IR spots, no bench.
-      </RuleSnippet>
-    </section>
-    <section class="card closable" id="open-now">
+    <section class="card collapsible" id="open-now">
       <h2>Open now</h2>
       {/* The VHS shelf (#7): drag a tape to the right (or tap it) to check it out. */}
       <div class="vhs-shelf">
         {openVotes.length > 0 && (
-          <a class="vhs" href="/approvals" draggable="false">
+          <a class="vhs" href="/approvals#approvals" draggable="false">
             <img src="/img/fx/vhs-approvals.webp" alt="" width="300" height="499" draggable="false">
             <span class="vhs-sticker num">{openVotes.length} open</span>
             <span class="sr-only">{openVotes.length} approval {openVotes.length === 1 ? "vote" : "votes"} open</span>
           </a>
         )}
-        {openPolls.length > 0 && (
-          <a class="vhs" href="/polls" draggable="false">
-            <img src="/img/fx/vhs-polls.webp" alt="" width="300" height="499" draggable="false">
-            <span class="vhs-sticker num">{openPolls.length} open</span>
-            <span class="sr-only">{openPolls.length} {openPolls.length === 1 ? "poll" : "polls"} open</span>
-          </a>
-        )}
-        {open.length === 0 && (
+        {openVotes.length === 0 && (
           <div class="vhs-empty">
             <img src="/img/toys/rewind-sticker.webp" alt="" width="100" height="102">
-            <p class="muted">Nothing to vote on right now. Be kind, rewind.</p>
+            <p class="muted">{openPolls.length ? "No approvals waiting. Be kind, rewind." : "Nothing to vote on right now. Be kind, rewind."}</p>
           </div>
         )}
       </div>
-      {open.length > 0 && <p class="small muted vhs-hint">Drag a tape to the right, or tap it, to check it out.</p>}
-      {openVotes.length > 0 && <p><a href="/approvals">{openVotes.length} approval {openVotes.length === 1 ? "vote" : "votes"}</a>: {openVotes.map((p) => p.question).join(" · ")}</p>}
-      {openPolls.length > 0 && <p><a href="/polls">{openPolls.length} {openPolls.length === 1 ? "poll" : "polls"}</a>: {openPolls.map((p) => p.question).join(" · ")}</p>}
+      {openVotes.length > 0 && <p class="small muted vhs-hint">Drag a tape to the right, or tap it, to check it out.</p>}
+      {openVotes.length > 0 && <p><a href="/approvals#approvals">{openVotes.length} approval {openVotes.length === 1 ? "vote" : "votes"}</a>: {openVotes.map((p) => p.question).join(" · ")}</p>}
+      {openPolls.length > 0 && <p><a href="#active-poll">{openPolls.length} {openPolls.length === 1 ? "poll" : "polls"}</a> open in the side column: {openPolls.map((p) => p.question).join(" · ")}</p>}
       <RuleSnippet title="How votes work" href="/rules#league" icon="🗳️" cta="Voting & moves">
         A free-agent add or IR return that breaks the tier caps goes to a community vote. It passes with {counts.votes} yes
         {counts.votes === 1 ? " vote" : " votes"} (more than half of the {counts.managed} managed teams).
       </RuleSnippet>
     </section>
-    <section class="card closable" id="dash-card">
+    <section class="card collapsible" id="dash-card">
       <h2>League dashboards</h2>
       <p class="muted">Standings, rosters with tier badges, transactions, scoring leaders and power rankings.</p>
       <p><a href="/dashboards">Open the dashboards</a></p>
     </section>
   </div>
   {waivers.length > 0 && (
-    <section class="card latefee-card closable" id="latefees">
+    <section class="card latefee-card collapsible" id="latefees">
       <img class="lf-stamp" src="/img/fx/latefee.webp" alt="" width="470" height="448" loading="lazy">
       <h2>On waivers</h2>
       <p class="muted small">Dropped in the last {Number(S.waiver_period_days) || 2} days. Claims go in ESPN; the late fee is just for fun.</p>
@@ -172,7 +159,7 @@ const draftLine = S.draft_type === "salary_cap"
     </section>
   )}
   {/* League feed as an AIM chat window (#8): spin the jog wheel to scrub through the notes. */}
-  <section class="card aim-card closable" id="feed-card">
+  <section class="card aim-card collapsible" id="feed-card">
     <h2>League feed</h2>
     {notes.length === 0
       ? <p class="muted empty" data-emoji="📭">No news yet.</p>
@@ -205,6 +192,7 @@ const draftLine = S.draft_type === "salary_cap"
   <script is:inline src="/alerts.js"></script>
   <script is:inline src="/toys-home.js" defer></script>
   <script is:inline src="/card-dl.js" defer></script>
+  <script is:inline src="/collapse.js"></script>
   <script is:inline>
     (function () {
       const mark = () => document.querySelectorAll(".tcard").forEach((c) => c.classList.toggle("mine", c.dataset.team === window.BL.viewTeam()));

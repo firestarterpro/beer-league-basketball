@@ -1,4 +1,4 @@
-// Player rows for the Tiers table and player cards: tier, owner, ESPN stat window
+// Player rows for the Stats table and player cards: tier, owner, ESPN stat window
 // totals, fantasy points under every scoring model, heat ranks (and how they moved
 // since the last run) and NBA.com defense.
 import { one, query } from "./db";

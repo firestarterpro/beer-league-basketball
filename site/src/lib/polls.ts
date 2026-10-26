@@ -71,6 +71,11 @@ export async function loadPolls(where: "generic" | "votes" | "all", limit = 30):
   return polls;
 }
 
+// Open league polls (not claim / IR votes), for the side column. Closed polls aren't shown anywhere any more.
+export async function openPolls(): Promise<Poll[]> {
+  return (await loadPolls("generic", 10)).filter((p) => p.open);
+}
+
 // Teams with a GM: the turnout a poll's "poll fuel" gauge measures against.
 export async function managedTeams(): Promise<number> {
   const [r] = await query<{ n: number }>("SELECT count(*)::int AS n FROM teams WHERE active AND manager_assigned");

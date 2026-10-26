@@ -1,7 +1,8 @@
 ---
 // One of the power-ranking side columns that sit beside Home.
-// left: ESPN buttons, Per-minute power, player spotlight. right: Per-week power, New to the top 50.
-import EspnCard from "./EspnCard.astro";
+// left: an open poll (only while one is open), player spotlight, Per-minute power. right: New to the top 50, Per-week power.
+// Fantasy Shortcuts live in the header bar (Base.astro).
+import ActivePoll from "./ActivePoll.astro";
 import HeatList from "./HeatList.astro";
 import { TIER_EMOJI } from "../lib/tiers";
 import { HEAT_NAME, heatTop, newToTop50, spotlight } from "../lib/players";
@@ -12,12 +13,10 @@ const [perMin, star] = side === "left" ? await Promise.all([heatTop("minutes_nba
 const [perWeek, arrivals] = side === "right" ? await Promise.all([heatTop("weekly_nba", 25), newToTop50()]) : [[], []];
 ---
 {side === "left" ? (
-  <aside class="home-side home-left" aria-label="Fantasy Shortcuts, Minutes Power and player spotlight">
-    <EspnCard />
-    <HeatList title="Per-minute power" view="minutes_nba" rows={perMin}
-      blurb={`${HEAT_NAME.minutes_nba}: production per 48 minutes, 30+ minutes per block. Top 25.`} />
+  <aside class="home-side home-left" aria-label="Open poll, player spotlight and Minutes Power">
+    <ActivePoll />
     {star && (
-      <section class="card spotlight">
+      <section class="card spotlight" id="spotlight">
         <h2>Player spotlight</h2>
         <p class="sp-name"><a href={`/player/${star.id}`}>{star.name}</a></p>
         <p class="muted small">{star.nba ?? ""}{star.pos?.length ? ` · ${star.pos.join("/")}` : ""} · tier rank {star.rank} {TIER_EMOJI[star.tier as keyof typeof TIER_EMOJI]}</p>
@@ -31,12 +30,12 @@ const [perWeek, arrivals] = side === "right" ? await Promise.all([heatTop("weekl
         <p class="muted small">A new top-50 player every time the page loads.</p>
       </section>
     )}
+    <HeatList title="Per-minute power" view="minutes_nba" rows={perMin}
+      blurb={`${HEAT_NAME.minutes_nba}: production per 48 minutes, 30+ minutes per block. Top 25.`} />
   </aside>
 ) : (
-  <aside class="home-side home-right" aria-label="Weekly Power and new arrivals">
-    <HeatList title="Per-week power" view="weekly_nba" rows={perWeek}
-      blurb={`${HEAT_NAME.weekly_nba}: weighted 5-game blocks plus defense. This sets the tiers. Top 25.`} />
-    <section class="card side-list">
+  <aside class="home-side home-right" aria-label="New arrivals and Weekly Power">
+    <section class="card side-list" id="new-top50">
       <h2>New to the top 50</h2>
       {arrivals.length === 0
         ? <p class="muted small">Nobody new since the last tier refresh.</p>
@@ -54,7 +53,9 @@ const [perWeek, arrivals] = side === "right" ? await Promise.all([heatTop("weekl
             </ol>
           </>
         )}
-      <a class="rs-btn" href="/tiers?show=movers">Biggest movers →</a>
+      <a class="rs-btn" href="/stats?show=movers">Biggest movers →</a>
     </section>
+    <HeatList title="Per-week power" view="weekly_nba" rows={perWeek}
+      blurb={`${HEAT_NAME.weekly_nba}: weighted 5-game blocks plus defense. This sets the tiers. Top 25.`} />
   </aside>
 )}

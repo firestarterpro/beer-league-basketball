@@ -1,0 +1,62 @@
+---
+// The draft: how it worked and who each team drafted. The draft is over; this page keeps the results in one place.
+// Results come from ESPN through the roster sync (rosters.acquired_via = 'draft'), so a player traded or dropped since
+// leaves this list. Bids show up if the LM entered them in draft_board.
+import Base from "../layouts/Base.astro";
+import { query } from "../lib/db";
+import { ESPN } from "../lib/espn";
+import { TIER_EMOJI } from "../lib/tiers";
+
+const [settings, picks, bids] = await Promise.all([
+  query(`SELECT setting_key, setting_value FROM league_settings
+         WHERE setting_key IN ('draft_type', 'draft_budget', 'keepers', 'draft_datetime')`),
+  query(`SELECT t.team_id, t.team_name, lower(t.abv) AS abv, p.player_id AS id, p.name, p.nba_team AS nba, p.positions AS pos,
+                coalesce(ct.tier, 'T3') AS tier, ct.rank
+         FROM rosters r JOIN teams t USING (team_id) JOIN players p USING (player_id)
+         LEFT JOIN current_tiers ct USING (player_id)
+         WHERE r.acquired_via = 'draft' AND t.active
+         ORDER BY t.team_name, ct.rank NULLS LAST, p.name`),
+  query(`SELECT player_id AS id, bid::float AS bid FROM draft_board`).catch(() => []),
+]);
+const S: Record<string, string> = Object.fromEntries(settings.map((r) => [r.setting_key, r.setting_value]));
+const bidOf = Object.fromEntries(bids.map((b) => [b.id, b.bid]));
+const teams = [...new Map(picks.map((p) => [p.team_id, { name: p.team_name, abv: p.abv, players: [] as typeof picks }])).values()];
+for (const p of picks) teams.find((t) => t.name === p.team_name)!.players.push(p);
+const howLine = S.draft_type === "salary_cap"
+  ? `Auction with a $${S.draft_budget} budget per team, ${S.keepers === "off" ? "no keepers" : S.keepers}.`
+  : "An auction draft.";
+---
+<Base title="Draft" active="/draft">
+  <section class="card">
+    <h2>The draft</h2>
+    <p class="small">{howLine} Over the caps because of the draft is legal: it's a ⚡ Power Play.{" "}
+      <a href="/rules#draft">Draft rules →</a></p>
+    <p class="small"><a href={ESPN.draft} target="_blank" rel="noopener">ESPN draft room and recap ↗</a></p>
+  </section>
+  <section class="card">
+    <h2>Who drafted whom</h2>
+    {teams.length === 0
+      ? <p class="muted">No draft picks yet. They show up after the next roster sync from ESPN.</p>
+      : (
+        <>
+          <p class="muted small">Players still on the team that drafted them, best tier rank first.</p>
+          <div class="grid draft-teams">
+            {teams.map((t) => (
+              <div class="draft-team">
+                <h3><a href={`/team/${t.abv}`}>{t.name}</a></h3>
+                <ol class="hl">
+                  {t.players.map((p) => (
+                    <li>
+                      <span class="hl-rank num">{p.rank ?? "–"}</span>
+                      <span class="hl-who"><a href={`/player/${p.id}`}>{p.name}</a><span class="muted small">{p.nba ?? "FA"} · {(p.pos ?? []).join("/")} · {TIER_EMOJI[p.tier as keyof typeof TIER_EMOJI]}</span></span>
+                      <span class="hl-score small muted">{bidOf[p.id] != null ? `$${bidOf[p.id]}` : ""}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+  </section>
+</Base>

@@ -12,7 +12,7 @@ const move = (r: HeatTopRow) => {
   return d === 0 ? null : d;
 };
 ---
-<section class="card side-list">
+<section class="card side-list" id={`heat-${view}`}>
   <h2>{title}</h2>
   <p class="muted small">{blurb}</p>
   {rows.length === 0
@@ -38,5 +38,5 @@ const move = (r: HeatTopRow) => {
         })}
       </ol>
     )}
-  <a class="rs-btn" href={`/tiers?view=${view}`}>Full ranking →</a>
+  <a class="rs-btn" href={`/stats?view=${view}`}>Full ranking →</a>
 </section>

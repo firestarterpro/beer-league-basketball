@@ -33,8 +33,8 @@ export const THEMES: Theme[] = [
 // Each page's own theme, from Jason's theme list (2026-10-23). A path ending in / covers every page under it.
 // Pages not listed (the LM desk, sign-in, pet desk) use Classic.
 export const PAGE_THEME: [path: string, theme: string][] = [
-  ["/", "miami"], ["/tiers", "skate"], ["/practice-draft", "bookfair"], ["/rules", "scoreboard"], ["/polls", "lisafrank"],
-  ["/approvals", "commish"], ["/actions", "foodcourt"], ["/dashboards", "xp"], ["/player/", "pokedex"], ["/team/", "cartoon"],
+  ["/", "miami"], ["/stats", "skate"], ["/draft", "bookfair"], ["/rules", "scoreboard"],
+  ["/approvals", "commish"], ["/dashboards", "xp"], ["/player/", "pokedex"], ["/team/", "cartoon"],
 ];
 
 export function themeFor(path: string): string {

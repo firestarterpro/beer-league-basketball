@@ -37,7 +37,7 @@ header { background: var(--head-paint, var(--head-bg)); color: var(--head-ink); 
 .updates-table .js-paused { margin-left: 6px; }
 .ps-code { white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px 10px; border: 1px solid currentColor; border-radius: 6px; font-size: 13px; }
 /* Nav: page buttons stacked in a grid, like the ESPN buttons. */
-.nav-btns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; flex: 1 1 520px; max-width: 720px; }
+.nav-btns { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; flex: 1 1 620px; max-width: 900px; }
 .nav-btns a { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 34px; padding: 4px 8px; border-radius: 8px;
   border: 2px solid var(--nav-line); color: var(--head-ink); text-decoration: none; font: 700 14px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
 .nav-btns a:hover { background: color-mix(in srgb, var(--nav-line) 22%, transparent); }
@@ -45,7 +45,7 @@ header { background: var(--head-paint, var(--head-bg)); color: var(--head-ink); 
 .sound-btn { padding: 4px 10px; font-size: 18px; line-height: 1; }
 .sound-btn[aria-pressed="false"] { opacity: .75; }
 @media (max-width: 640px) {
-  .nav-btns { flex-basis: 100%; gap: 4px; }
+  .nav-btns { flex-basis: 100%; gap: 4px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .nav-btns a { font-size: 12px; min-height: 32px; padding: 3px 4px; letter-spacing: .01em; }
   .head-pickers select { width: 150px; }
 }
@@ -57,7 +57,7 @@ h1, h2, h3 { font-family: var(--head, var(--display)); font-style: var(--h-style
 h1 { font-size: calc(30px * var(--h-scale, 1)); text-transform: var(--h-transform, uppercase); }
 h2 { font-size: calc(22px * var(--h-scale, 1)); text-transform: var(--h-transform, uppercase); letter-spacing: .02em; }
 h3 { font-size: calc(19px * var(--h-scale, 1)); }
-p { margin: 0; max-width: 65ch; }
+p { margin: 0; }   /* text runs the full width of its card */
 a { color: var(--accent); }
 .muted { color: var(--muted); } .small { font-size: 14px; }
 .stack { display: grid; gap: 12px; }
@@ -237,8 +237,7 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 .explain > summary { cursor: pointer; padding: 10px 0; font: 700 17px/1.2 var(--display); text-transform: uppercase; letter-spacing: .03em; }
 .explain[open] { padding-bottom: 12px; }
 .explain h3 { font-size: 17px; margin-top: 6px; }
-.explain ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75ch; }
-.explain p { max-width: 75ch; }
+.explain ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .pt-groups { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; display: grid; gap: 6px; margin: 0; }
 .mv { font: 700 14px/1 var(--display); }
 .mv.up { color: var(--ok); } .mv.down { color: var(--bad); } .mv.new { color: var(--accent); }
@@ -288,24 +287,6 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
   .page-grid { grid-template-columns: minmax(0, 1fr) 280px; }
   .page-side { position: sticky; top: 16px; align-self: start; }
 }
-/* Tiers: tier info on the left, filters + table in the middle, ESPN on the right.
-   Laptops: ESPN tucks under the info. "More stats" in use: the table takes the whole width. */
-.tiers-grid { display: grid; gap: 24px; }
-.tiers-info { display: grid; gap: 24px; align-content: start; min-width: 0; }
-@media (min-width: 1100px) {
-  .tiers-grid { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: auto 1fr; }
-  .tiers-grid .tiers-info { grid-column: 1; grid-row: 1; }
-  .tiers-grid .page-main { grid-column: 2; grid-row: 1 / span 2; }
-  .tiers-grid .page-side { grid-column: 1; grid-row: 2; position: static; }
-}
-@media (min-width: 1400px) {
-  .tiers-grid { grid-template-columns: 320px minmax(0, 1fr) 280px; grid-template-rows: auto; }
-  .tiers-grid .page-main { grid-column: 2; grid-row: 1; }
-  .tiers-grid .page-side { grid-column: 3; grid-row: 1; position: sticky; }
-}
-.tiers-grid.no-sides { grid-template-columns: minmax(0, 1fr); }
-.tiers-grid.no-sides > aside { display: none; }
-.tiers-grid.no-sides .page-main { grid-column: 1; grid-row: 1; }
 .side-list h2, .spotlight h2 { font-size: 20px; margin-bottom: 2px; }
 .hl { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 2px; }
 .hl li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 6px; font-size: 14px; }
@@ -321,9 +302,7 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 .spotlight .sp-name a { color: var(--ink); text-decoration: none; }
 .sp-links { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 /* Team mascots: all 7 in two rows (4 + 3). */
-#gp-wall { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 640px) {   /* phones: smaller mascots */
-  #gp-wall { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   #gp-wall .gp-mascot { --gp-size: 56px; padding: 8px 4px; gap: 4px; border-radius: 10px; }
   #gp-wall .gp-mascot .gp-stage { width: 56px; height: 56px; }
   #gp-wall .gp-mascot b { font-size: 11px; overflow-wrap: anywhere; }
@@ -365,3 +344,51 @@ button.link { background: none; border: 0; padding: 4px; color: var(--accent); t
 .card-dl-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
 .card-dl-pair figure { margin: 0; display: grid; gap: 4px; justify-items: center; }
 .card-dl-pair img { width: 100%; aspect-ratio: 2 / 3; object-fit: contain; border-radius: 8px; background: var(--line); }
+
+/* Home: collapsible sections (collapse.js). The ▾ sits top right; a folded card shows only its heading. */
+.collapsible { position: relative; }
+.collapsible > .cl-head { padding-right: 38px; cursor: pointer; user-select: none; }
+.cl-btn { position: absolute; top: 8px; right: 8px; z-index: 3; width: 30px; height: 30px; padding: 0; border-radius: 6px; display: grid; place-items: center;
+  font: 700 16px/1 var(--body); color: var(--muted); background: var(--surface); border: 1px solid var(--line); }
+.cl-btn:hover, .cl-btn:focus-visible { color: var(--ink); border-color: var(--accent); }
+.card.collapsed { gap: 0; }
+.card.collapsed > :not(.cl-head):not(.cl-btn) { display: none !important; }
+/* Masco-Pets: the 7 mascots plus the "How pets work" card in the 8th spot. */
+.gp-wall-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.gp-wall-grid > #gp-wall { display: contents; }
+.gp-key { display: grid; gap: 6px; align-content: center; padding: 12px; border: 1px dashed var(--line); border-radius: 14px; color: var(--muted); line-height: 1.35; }
+.gp-key b { color: var(--ink); font-family: var(--display); text-transform: uppercase; letter-spacing: .03em; }
+@media (max-width: 640px) { .gp-wall-grid { gap: 6px; } .gp-key { font-size: 12px; padding: 8px; } }
+/* Side column poll (only while a poll is open). */
+.active-poll .poll { padding: 12px; }
+/* Header: Fantasy Shortcuts link bar (ESPN). Scrolls sideways on phones instead of wrapping. */
+.shortcut-bar { display: flex; gap: 6px; align-items: center; padding-block: 0 8px; overflow-x: auto; scrollbar-width: thin; }
+.shortcut-bar b { font: 700 13px/1 var(--display); color: var(--head-muted); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.shortcut-bar a { white-space: nowrap; font: 600 13px/1 var(--body); color: var(--head-ink); text-decoration: none; padding: 5px 9px;
+  border: 1px solid var(--nav-line); border-radius: 999px; }
+.shortcut-bar a:hover { background: var(--nav-line); color: var(--nav-ink); }
+/* ---------- Stats page: one section, plain rows (no glow), advanced settings ---------- */
+.stats-page .sec-head h1 { margin: 0; }
+.st-controls { gap: 8px 14px; }
+.st-adv { padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.st-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 10px; min-width: 0; }
+.st-box legend { font: 700 14px/1 var(--display); text-transform: uppercase; letter-spacing: .04em; padding: 0 6px; }
+.st-num { width: 80px; }
+.st-statf select { max-width: 280px; }
+.st-cols { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 340px; overflow: auto; }
+.st-col { display: grid; grid-template-columns: 130px 120px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; }
+.st-col:nth-child(odd) { background: var(--bg); }
+.st-col input[data-c="l"] { width: 100%; }
+.st-col-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-col-move { display: flex; gap: 4px; }
+.st-col-move button { padding: 2px 8px; }
+@media (max-width: 640px) { .st-col { grid-template-columns: 1fr 1fr; } .st-col-title { grid-column: 1 / -1; order: 5; } }
+.st-table td, .st-table thead th { overflow: hidden; text-overflow: ellipsis; }
+.st-table thead th { position: sticky; }
+.st-table thead th[data-k] { padding-right: 12px; }
+.st-grip { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
+.st-grip:hover { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.st-table .who a { grid-template-columns: 30px 30px minmax(0, 1fr); }
+@media (max-width: 560px) { .st-table .who a { grid-template-columns: 24px 24px minmax(0, 1fr); } }
+.st-hurt { color: var(--bad); font-weight: 600; text-transform: uppercase; font-size: 11px; }
+.explain-wrap > summary { cursor: pointer; }

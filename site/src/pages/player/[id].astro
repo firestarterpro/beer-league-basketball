@@ -52,8 +52,8 @@ const moveText = (now: number, before?: number | null) =>
 const tierMove = p.prev_tier && p.prev_tier !== tier ? (p.prev_tier > tier ? "Moved up a tier" : "Dropped a tier") : null;
 const q = (m: string, s: string) => `?model=${m}&split=${s}`;
 ---
-<Base title={p.name} active="/tiers">
-  <p class="small"><a href="/tiers">← Back to the tier list</a></p>
+<Base title={p.name} active="/stats">
+  <p class="small"><a href="/stats">← Back to Stats</a></p>
 
   <article class={`pcard pcard-${tier.toLowerCase()}`}>
     <div class="pcard-top">
@@ -175,7 +175,7 @@ const q = (m: string, s: string) => `?model=${m}&split=${s}`;
         ))}
       </div>
       {!p.heat && <p class="muted small">Not in the latest top 100, or the rankings haven't been published yet.</p>}
-      <p class="small"><a href="/tiers#how">How the rankings work</a></p>
+      <p class="small"><a href="/stats#how">How the rankings work</a></p>
       {defBox.length > 0 && (
         <>
           <h3>Defense per game <span class="muted small">(NBA.com, {d.g} games)</span></h3>

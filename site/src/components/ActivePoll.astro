@@ -1,0 +1,16 @@
+---
+// The open league poll(s), at the top of a side column. Renders nothing when no poll is open.
+// polls: pass them in when the page already loaded them (Base.astro decides whether to show a side column at all).
+import PollCard from "./PollCard.astro";
+import { managedTeams, openPolls, type Poll } from "../lib/polls";
+
+interface Props { polls?: Poll[] }
+const open = Astro.props.polls ?? (await openPolls());
+const teams = open.length ? await managedTeams() : 0;
+---
+{open.length > 0 && (
+  <div class="active-poll stack" id="active-poll">
+    {open.map((p) => <PollCard poll={p} teams={teams} />)}
+  </div>
+)}
+{open.length > 0 && <script is:inline src="/polls.js"></script>}
