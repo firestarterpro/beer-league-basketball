@@ -155,7 +155,8 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 .pt tr.top10 > td:last-child { box-shadow: inset -4px 0 0 var(--heat-1); }
 .pt .who { position: sticky; left: 0; z-index: 1; min-width: 210px; max-width: 260px; text-align: left; font-weight: 400; }
 .pt thead .who { z-index: 3; }
-.pt .who a { display: grid; grid-template-columns: 30px 30px minmax(0, 1fr); gap: 6px; align-items: center; color: inherit; text-decoration: none; }
+.pt .face { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; object-position: 50% 12%; background: rgb(127 127 127 / .15); }
+.pt .who a { display: grid; grid-template-columns: 30px 30px 30px minmax(0, 1fr); gap: 6px; align-items: center; color: inherit; text-decoration: none; }
 .pt .who .nm { display: grid; white-space: normal; line-height: 1.2; }
 .pt .who .pill { justify-self: start; font-size: 11px; padding: 3px 6px; }
 .pt .rk { font: 800 17px/1 var(--display); text-align: right; color: var(--muted); }
@@ -177,7 +178,7 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 @keyframes foil { 0% { background-position: 150% 0; } 60%, 100% { background-position: -100% 0; } }
 @keyframes flare { 0%, 100% { filter: drop-shadow(0 0 3px rgb(255 160 0 / .7)); } 50% { filter: drop-shadow(0 0 9px rgb(255 60 0 / .95)); } }
 @media (prefers-color-scheme: dark) { .pt tr.top25 .rk { color: #ffd76a; } .pt tr.top25 > .who { color: #1b1f24; } .pt tr.top25 > .who .muted { color: #4a4f55; } }
-@media (max-width: 560px) { .pt .who { min-width: 170px; max-width: 190px; } .pt .who a { grid-template-columns: 24px 24px minmax(0, 1fr); } .pt .patch { width: 24px; height: 24px; } }
+@media (max-width: 560px) { .pt .who { min-width: 170px; max-width: 190px; } .pt .who a { grid-template-columns: 24px 24px 24px minmax(0, 1fr); } .pt .patch, .pt .face { width: 24px; height: 24px; } }
 
 /* ---------- Player card ---------- */
 .pcard { --frame: var(--bronze); background: var(--surface); border: 6px solid var(--frame); border-radius: 14px; padding: 16px; display: grid; gap: 14px; position: relative; overflow: hidden; box-shadow: 0 2px 0 rgb(0 0 0 / .08); }
@@ -185,7 +186,9 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 .pcard-t1::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / .35) 45%, rgb(255 210 120 / .25) 50%, transparent 65%); background-size: 300% 100%; animation: foil 7s ease-in-out infinite; }
 .pcard-t2 { --frame: var(--silver); background: linear-gradient(135deg, color-mix(in srgb, var(--silver) 25%, var(--surface)), var(--surface) 45%); }
 .pcard-top { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
-.pcard-name { display: grid; gap: 4px; min-width: 0; }
+.pcard-name { display: grid; gap: 4px; min-width: 0; flex: 1 1 220px; }
+.pcard-face { width: 180px; height: auto; aspect-ratio: 260 / 190; object-fit: cover; border-radius: 10px; border: 2px solid currentColor; background: rgb(255 255 255 / .06); }
+@media (max-width: 560px) { .pcard-face { width: 120px; } }
 .pcard-name h1 { font-size: clamp(28px, 7vw, 40px); }
 .pcard-tier { display: grid; justify-items: center; gap: 4px; font: 700 15px/1 var(--display); text-transform: uppercase; }
 .pcard-t1 .pcard-tier img { filter: drop-shadow(0 0 8px rgb(255 190 40 / .8)); }

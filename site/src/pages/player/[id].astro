@@ -6,7 +6,8 @@ import { query } from "../../lib/db";
 import { ESPN } from "../../lib/espn";
 import { TIER_EMOJI, TIER_NAME } from "../../lib/tiers";
 import {
-  HEAT, HEAT_NAME, MODEL_NAME, SPLITS, SPLIT_NAME, avatarSrc, asSplit, formula, leagueModel, playerRow, pointsNeighbours,
+  HEAT, HEAT_NAME, MODEL_NAME, SPLITS, SPLIT_NAME, avatarSrc, asSplit, formula, headshotSrc, leagueModel, nbaPage, playerRow,
+  pointsNeighbours,
 } from "../../lib/players";
 
 const id = Astro.params.id ?? "";
@@ -55,10 +56,13 @@ const q = (m: string, s: string) => `?model=${m}&split=${s}`;
 
   <article class={`pcard pcard-${tier.toLowerCase()}`}>
     <div class="pcard-top">
+      {headshotSrc(p.nba_id, true) &&
+        <img class="pcard-face" src={headshotSrc(p.nba_id, true)} alt={p.name} width="260" height="190" onerror="this.remove()">}
       <div class="pcard-name">
         <h1>{p.name}</h1>
         <p class="muted">{p.nba ?? "Free agent"} · {(p.pos || []).join(" / ") || "–"}
           {hurt && <> · <span class="pill bad" title={p.injury ?? ""}>{p.status.replace(/_/g, " ")}{p.injury ? ` (${p.injury})` : ""}</span></>}</p>
+        {nbaPage(p.nba_id) && <p class="small"><a href={nbaPage(p.nba_id)} target="_blank" rel="noopener">NBA.com profile ↗</a></p>}
       </div>
       <div class="pcard-tier">
         <img src={PATCH[tier]} alt={TIER_NAME[tier]} width="96" height="96">

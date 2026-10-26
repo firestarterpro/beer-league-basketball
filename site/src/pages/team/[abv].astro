@@ -5,7 +5,7 @@ import Base from "../../layouts/Base.astro";
 import { one, query } from "../../lib/db";
 import { ESPN } from "../../lib/espn";
 import { TIER_EMOJI, TIER_NAME } from "../../lib/tiers";
-import { TEAM_ART, avatarSrc } from "../../lib/players";
+import { TEAM_ART, avatarSrc, headshotSrc } from "../../lib/players";
 import { abvLabel, cardRows } from "../../lib/cards";
 import TeamCard from "../../components/TeamCard.astro";
 
@@ -24,9 +24,10 @@ const team = await one<{
 if (!team) return new Response("No team by that name", { status: 404 });
 
 const roster = await query<{ player_id: string; player_name: string; nba_team: string | null; positions: string[] | null;
-  slot: string; position_slot: string | null; tier: "T1" | "T2" | "T3"; rank: number | null }>(
-  `SELECT player_id, player_name, nba_team, positions, slot, position_slot, tier, rank FROM roster_tiers
-   WHERE team_id = $1 ORDER BY slot = 'IR', tier, rank NULLS LAST, player_name`, [team.team_id]);
+  slot: string; position_slot: string | null; tier: "T1" | "T2" | "T3"; rank: number | null; nba_id: number | null }>(
+  `SELECT r.player_id, r.player_name, r.nba_team, r.positions, r.slot, r.position_slot, r.tier, r.rank, p.nba_person_id AS nba_id
+   FROM roster_tiers r LEFT JOIN players p USING (player_id)
+   WHERE r.team_id = $1 ORDER BY r.slot = 'IR', r.tier, r.rank NULLS LAST, r.player_name`, [team.team_id]);
 
 const [[card], season] = await Promise.all([
   cardRows(team.abv),
@@ -86,7 +87,10 @@ const sign = (i: number) => SIGNS[i % SIGNS.length];
               <button type="button" class={`patch-btn ${p.tier.toLowerCase()}${p.slot === "IR" ? " ir" : ""}`} data-sign={sign(i)}
                 data-name={p.player_name} data-tier={p.tier} data-meta={`${p.nba_team ?? "Free agent"} · ${TIER_NAME[p.tier]}${p.rank ? ` · tier rank #${p.rank}` : ""}${p.slot === "IR" ? " · on IR" : ""}`}
                 data-href={`/player/${encodeURIComponent(p.player_id)}`}>
-                <img src={PATCH[p.tier]} alt="" width="256" height="256" loading="lazy">
+                <span class="patch-face">
+                  <img src={PATCH[p.tier]} alt="" width="256" height="256" loading="lazy">
+                  {headshotSrc(p.nba_id) && <img class="face" src={headshotSrc(p.nba_id)} alt="" width="260" height="190" loading="lazy" onerror="this.remove()">}
+                </span>
                 <b>{p.player_name}</b>
                 <span class="small">{p.slot === "IR" ? "IR" : p.position_slot ?? (p.positions ?? []).join("/")}{p.nba_team ? ` · ${p.nba_team}` : ""}</span>
               </button>

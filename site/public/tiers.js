@@ -12,6 +12,10 @@
   let sort = null;                // { key, dir } from a header click; null = the "Rank by" order
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const PATCH = { T1: "/img/ui/tier-t1.webp", T2: "/img/ui/tier-t2.webp", T3: "/img/ui/tier-t3.webp" };
+  // NBA.com headshot (same URL as lib/players.ts headshotSrc); an empty circle when there's none.
+  const face = (r) => r.nba_id
+    ? `<img class="face" src="https://cdn.nba.com/headshots/nba/latest/260x190/${Number(r.nba_id)}.png" alt="" width="30" height="30" loading="lazy" onerror="this.style.visibility='hidden'">`
+    : `<span class="face" aria-hidden="true"></span>`;
 
   const ctl = { view: $("pt-view"), model: $("pt-model"), split: $("pt-split"), search: $("pt-search"),
                 pos: $("pt-pos"), show: $("pt-show"), pergame: $("pt-pergame") };
@@ -183,6 +187,7 @@
         <th scope="row" class="who"><a href="/player/${encodeURIComponent(r.id)}">
           <span class="rk num">${k ?? "–"}</span>
           <img class="patch" src="${PATCH[r.tier] || PATCH.T3}" alt="${esc(data.tierName[r.tier] || "")}" title="${esc(data.tierName[r.tier] || "")} · tier rank ${r.tier_rank ?? "–"}${r.prev_tier && r.prev_tier !== r.tier ? ` (was ${esc(data.tierName[r.prev_tier] || r.prev_tier)})` : ""}" width="30" height="30" loading="lazy">
+          ${face(r)}
           <span class="nm"><b>${esc(r.name)}</b> ${r.prev_tier && r.prev_tier !== r.tier ? `<span class="pill ${r.prev_tier > r.tier ? "ok" : "warn"}">${r.prev_tier > r.tier ? "Tier up" : "Tier down"}</span>` : ""}${hurt}<span class="muted small">${esc(r.nba || "FA")} · ${esc((r.pos || []).join("/") || "–")}</span></span>
         </a></th>
         <td class="owner small">${r.team_name ? esc(r.team_name) + (r.slot === "IR" ? " · IR" : "") : '<span class="muted">Free agent</span>'}</td>

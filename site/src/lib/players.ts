@@ -34,7 +34,12 @@ export const TEAM_ART: Record<string, string> = {
   flag: "flag", lba: "lba", stat: "stat", jme: "jme", jst: "jme", mps: "mps", srl: "mps", cct: "cct", bbt: "bbt",
 };
 export const avatarSrc = (abv?: string | null) => (abv && TEAM_ART[abv] ? `/img/teams/avatar-${TEAM_ART[abv]}.webp` : null);
-export const cardSrc = (abv?: string | null) => (abv && TEAM_ART[abv] ? `/img/teams/card-${TEAM_ART[abv]}.webp` : null);
+// NBA.com headshots and player pages, by NBA.com person id (nba_sync.py link fills players.nba_person_id).
+// Loaded straight from NBA.com's image CDN; a player without an id just shows no photo.
+export const headshotSrc = (nbaId?: number | null, big = false) =>
+  nbaId ? `https://cdn.nba.com/headshots/nba/latest/${big ? "1040x760" : "260x190"}/${nbaId}.png` : null;
+export const nbaPage = (nbaId?: number | null) => (nbaId ? `https://www.nba.com/player/${nbaId}` : null);
+export const cardSrc =(abv?: string | null) => (abv && TEAM_ART[abv] ? `/img/teams/card-${TEAM_ART[abv]}.webp` : null);
 
 // SQL for a name with accents, punctuation and Jr./III dropped, the same as sync/power_tiers.py
 // norm(), so NBA.com's "Luka Dončić" in the power rankings meets ESPN's "Luka Doncic".
@@ -90,7 +95,7 @@ const ROW_SQL = `
           JOIN (SELECT player_id, ${normName("name")} AS nk FROM players) p ON p.nk = ${normName("h.player_name")}
           WHERE h.nba_person_id IS NULL) h
     GROUP BY h.player_id)
-  SELECT p.player_id AS id, p.name, p.nba_team AS nba, p.positions AS pos, p.status, p.injury_note AS injury,
+  SELECT p.player_id AS id, p.name, p.nba_team AS nba, p.positions AS pos, p.status, p.injury_note AS injury, p.nba_person_id AS nba_id,
          p.auction_value::float AS value, ct.rank::int AS tier_rank, coalesce(ct.tier, 'T3') AS tier,
          t.team_id AS team, t.team_name AS team_name, lower(t.abv) AS abv, r.slot,
          coalesce(ps.games, 0) AS gp, coalesce(ps.totals, '{}') AS t, ps.espn_points::float AS espn,
