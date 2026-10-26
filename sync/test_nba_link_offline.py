@@ -3,7 +3,12 @@
 Uses made-up NBA.com rows, so it proves the matching rules, not NBA.com's live list; the first
 `python nba_sync.py link --dry-run` on the LM's PC shows how the real names line up.
 
-    DATABASE_URL=postgresql://... python test_nba_link_offline.py
+The writes are rolled back, but they still land on whatever database they reach, so they only run
+against a scratch database named in TEST_DATABASE_URL, never DATABASE_URL: importing nba_sync loads
+sync/.env, whose DATABASE_URL is the live league. Without TEST_DATABASE_URL only the database-free
+checks run.
+
+    TEST_DATABASE_URL=postgresql://localhost/scratch python test_nba_link_offline.py
 """
 
 import os
@@ -29,6 +34,12 @@ ROSTER = {"headers": ["PERSON_ID", "DISPLAY_LAST_COMMA_FIRST", "DISPLAY_FIRST_LA
                    [None, "Nobody", "", 1, ""]]}
 
 results = []
+
+
+def scratch_db():
+    """TEST_DATABASE_URL, or None (skip the database checks). Never the live DATABASE_URL from sync/.env."""
+    url = os.environ.get("TEST_DATABASE_URL")
+    return url if url and url != os.environ.get("DATABASE_URL") else None
 
 
 def check(name, ok, detail=""):
@@ -78,23 +89,27 @@ def main():
         n.CommonAllPlayers = real
     check("falls back to nba_api's built-in list", len(fallback) > 300 and all(t == "" for _, _, t in fallback), str(len(fallback)))
 
-    with psycopg.connect(os.environ["DATABASE_URL"]) as conn, conn.cursor() as cur:
-        # Keep the database's own players out of the way (all of this is rolled back).
-        cur.execute("UPDATE players SET name = name || ' (old)' WHERE nba_person_id IS NULL")
-        cur.execute("UPDATE players SET nba_person_id = NULL WHERE nba_person_id = ANY(%s)", ([p for p, _, _ in people],))
-        cur.executemany("INSERT INTO players (player_id, name, nba_team) VALUES (%s, %s, %s)", espn)
-        cur.execute("INSERT INTO players (player_id, name, nba_team, nba_person_id) VALUES ('e0', 'Jrue Holiday', 'POR', 900003)")
-        links, unmatched, names = n.link(cur, people)
-        cur.execute("SELECT player_id, nba_person_id FROM players WHERE player_id LIKE 'e%' AND nba_person_id IS NOT NULL")
-        saved = dict(cur.fetchall())
-        check("links written to players", saved.get("e4") == 1629651 and saved.get("e7") == 1642385 and len(saved) == 11,
-              f"{len(saved)} with an id, e0 included")
-        check("an id on another player stays put", saved.get("e0") == 900003 and "e12" not in saved)
-        cur.execute("SELECT count(*) FROM nba_people WHERE nba_person_id = ANY(%s)", ([p for p, _, _ in people],))
-        check("NBA.com people saved for next time", cur.fetchone()[0] == 13)
-        again, unmatched, _ = n.link(cur, people)
-        check("a second run finds nothing new (the free-agent Chris Smith still isn't guessed)", not again, str(again))
-        conn.rollback()
+    url = scratch_db()
+    if not url:
+        print("no scratch TEST_DATABASE_URL: database checks skipped")
+    else:
+        with psycopg.connect(url) as conn, conn.cursor() as cur:
+            # Keep the database's own players out of the way (all of this is rolled back).
+            cur.execute("UPDATE players SET name = name || ' (old)' WHERE nba_person_id IS NULL")
+            cur.execute("UPDATE players SET nba_person_id = NULL WHERE nba_person_id = ANY(%s)", ([p for p, _, _ in people],))
+            cur.executemany("INSERT INTO players (player_id, name, nba_team) VALUES (%s, %s, %s)", espn)
+            cur.execute("INSERT INTO players (player_id, name, nba_team, nba_person_id) VALUES ('e0', 'Jrue Holiday', 'POR', 900003)")
+            links, unmatched, names = n.link(cur, people)
+            cur.execute("SELECT player_id, nba_person_id FROM players WHERE player_id LIKE 'e%' AND nba_person_id IS NOT NULL")
+            saved = dict(cur.fetchall())
+            check("links written to players", saved.get("e4") == 1629651 and saved.get("e7") == 1642385 and len(saved) == 11,
+                  f"{len(saved)} with an id, e0 included")
+            check("an id on another player stays put", saved.get("e0") == 900003 and "e12" not in saved)
+            cur.execute("SELECT count(*) FROM nba_people WHERE nba_person_id = ANY(%s)", ([p for p, _, _ in people],))
+            check("NBA.com people saved for next time", cur.fetchone()[0] == 13)
+            again, unmatched, _ = n.link(cur, people)
+            check("a second run finds nothing new (the free-agent Chris Smith still isn't guessed)", not again, str(again))
+            conn.rollback()
     print(f"{sum(results)} passed, {len(results) - sum(results)} failed")
 
 
