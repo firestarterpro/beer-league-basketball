@@ -1,0 +1,37 @@
+# Gemini CLI ("Gemini backup") policy, loaded by invoke-worker.ps1 with --policy.
+# Same hard blocks as the Copilot deny list; the local checks run without asking.
+# Higher priority wins, so the denies (900) beat the allows (500).
+
+[[rule]]
+toolName = "run_shell_command"
+commandRegex = '.*\bnpm(\.cmd)?\s+(run(-script)?\s+)?deploy\b.*'
+decision = "deny"
+priority = 900
+denyMessage = "Deploys need the user's approval (beer-league worker guard)."
+
+[[rule]]
+toolName = "run_shell_command"
+commandRegex = '.*\bwrangler\b.*'
+decision = "deny"
+priority = 900
+denyMessage = "wrangler is blocked for workers (beer-league worker guard)."
+
+[[rule]]
+toolName = "run_shell_command"
+commandRegex = '.*\bgit\s+(push|reset)\b.*'
+decision = "deny"
+priority = 900
+denyMessage = "git push and git reset are blocked for workers (beer-league worker guard)."
+
+[[rule]]
+toolName = "run_shell_command"
+commandRegex = '(?i).*(^|[\s;&|(])(rm|del|erase|rd|rmdir|ri|Remove-Item)(\s|$).*'
+decision = "deny"
+priority = 900
+denyMessage = "Delete commands are blocked for workers (beer-league worker guard)."
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = ["npm run build", "git status", "git diff", "git log"]
+decision = "allow"
+priority = 500

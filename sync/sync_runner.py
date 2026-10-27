@@ -256,13 +256,18 @@ def run_script(now, args):
 
 
 def run_heat(now):
-    """Heat rankings: build_model.py + publish, once BUILD_MODEL_DIR is set in .env."""
+    """Heat rankings: pull_season.py + build_model.py + publish, once BUILD_MODEL_DIR is set in .env."""
     folder = os.environ.get("BUILD_MODEL_DIR")
     if not folder:
         log(now, "heat rankings: skipped (set BUILD_MODEL_DIR in .env once build_model.py reads this season)")
         return True
-    ok = run_script(now, [str(Path(folder) / "build_model.py")])
-    return run_script(now, ["publish_rankings.py", folder]) and ok
+    model_dir = Path(folder)
+    pull_ok = run_script(now, [str(model_dir / "pull_season.py")])
+    if not pull_ok:
+        log(now, "heat rankings: pull_season.py failed; continuing with build and publish")
+    build_ok = run_script(now, [str(model_dir / "build_model.py")])
+    pub_ok = run_script(now, ["publish_rankings.py", str(model_dir / "out_season")])
+    return pull_ok and build_ok and pub_ok
 
 
 def run_job(now, job, slate):

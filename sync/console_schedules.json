@@ -1,0 +1,17 @@
+{
+  "stats": {
+    "mode": "interval",
+    "text": "Every 1h",
+    "mins": 60
+  },
+  "status": {
+    "mode": "interval",
+    "text": "Every 1h",
+    "mins": 60
+  },
+  "moves": {
+    "mode": "interval",
+    "text": "Every 1h",
+    "mins": 60
+  }
+}

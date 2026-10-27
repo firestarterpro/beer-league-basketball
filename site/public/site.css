@@ -190,6 +190,8 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 .pcard-name { display: grid; gap: 4px; min-width: 0; flex: 1 1 220px; }
 .pcard-face { width: 180px; height: auto; aspect-ratio: 260 / 190; object-fit: cover; border-radius: 10px; border: 2px solid currentColor; background: rgb(255 255 255 / .06); }
 @media (max-width: 560px) { .pcard-face { width: 120px; } }
+/* Portrait is a square 512x512 sprite: crop from the top so the head shows in the landscape card box. */
+.pcard-face.portrait { object-position: 50% 0; }
 /* Hurt player: status pill, body part, estimated return date, link to NBA's injury report. */
 .inj-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
 .inj-line .inj-back { font-weight: 700; color: var(--bad); }

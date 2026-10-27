@@ -10,6 +10,9 @@ import { query } from "../lib/db";
 
 import { TIER_EMOJI, TIER_NAME } from "../lib/tiers";
 import { HEAT, HEAT_NAME, MODEL_NAME, SPLITS, SPLIT_NAME, TIER_SOURCE_NAME, leagueModel, playerRows, tierInfo } from "../lib/players";
+// Portrait manifest, read at build time: which NBA.com person ids have a cartoon portrait.
+import playerPortraits from "../../public/img/players/portraits.json";
+const portraitIds = playerPortraits.map((p) => p.nba_person_id);
 
 const [info, rows, model, models, teams] = await Promise.all([
   tierInfo(),
@@ -22,7 +25,7 @@ const snap = info.snapshot;
 const fmtDate = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { dateStyle: "medium" });
 const tierLabel = snap ? `Tier rank (${snap.source === "espn" ? "ESPN" : HEAT_NAME[snap.source] ?? "power ranking"})` : "Tier rank";
 const data = { rows, model, heatName: HEAT_NAME, emoji: TIER_EMOJI, tierName: TIER_NAME, t1: info.t1, t2: info.t2,
-  prevVersion: snap?.prev_version ?? null };
+  prevVersion: snap?.prev_version ?? null, portraitIds };
 ---
 <Base title="Stats" active="/stats" sides>
 <section class="stats-page stack" id="stats">

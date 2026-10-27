@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Beer League // Control Panel</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#020617; 
+    --card:rgba(15, 23, 42, 0.6); 
+    --border:rgba(255, 255, 255, 0.1);
+    --txt:#f8fafc; 
+    --muted:#94a3b8;
+    --blue:#3b82f6; 
+    --cyan:#06b6d4;
+    --green:#10b981; 
+    --orange:#f59e0b; 
+    --font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  
+  body{
+    background-color:var(--bg); color:var(--txt); font-family:var(--font); 
+    min-height:100vh; font-size:18px; line-height:1.4; overflow-x: hidden;
+  }
+
+  /* --- LIQUID BACKGROUND --- */
+  .bg-waves {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1;
+    background: 
+      radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 40%),
+      radial-gradient(circle at 85% 30%, rgba(6, 182, 212, 0.15), transparent 40%);
+    animation: waveMove 15s ease-in-out infinite alternate;
+  }
+  @keyframes waveMove {
+    0% { transform: scale(1) translate(0, 0); }
+    100% { transform: scale(1.1) translate(-2%, 2%); }
+  }
+
+  /* --- GLASSMORPHISM --- */
+  header, .job-card, .dial-card, .feed-card {
+    background: var(--card); 
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  header{position:sticky; top:0; z-index:10; padding:16px 24px; display:flex; align-items:center; justify-content:space-between; border-radius: 0 0 16px 16px;}
+  .logo-area{display:flex; align-items:center; gap:12px}
+  .logo-icon{width:48px; height:48px; border-radius:12px; background:linear-gradient(135deg, var(--cyan), var(--blue)); display:grid; place-items:center; font-size:28px; box-shadow: 0 0 20px rgba(6,182,212,.4);}
+  h1{font-size:24px; font-weight:800; letter-spacing:-0.5px;}
+  p.sub{font-size:14px; color:var(--muted); font-weight:500; margin-top:2px}
+  
+  .status-badge{display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:99px; font-weight:700; font-size:16px; background:rgba(0,0,0,0.3); color:var(--muted); transition:all .3s;}
+  .status-badge .dot{width:10px; height:10px; border-radius:50%; background:currentColor;}
+  .status-badge.healthy{background:rgba(16,185,129,.15); color:var(--green);}
+  .status-badge.running{background:rgba(59,130,246,.15); color:var(--blue); animation:pulse 1.5s infinite;}
+
+  main{max-width:1400px; margin:0 auto; padding:24px; display:grid; gap:24px; grid-template-columns: minmax(0, 2.2fr) minmax(340px, 1fr); align-items:start;}
+  @media(max-width:1080px){ main{grid-template-columns:1fr} }
+
+  /* --- CARDS --- */
+  .jobs-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(310px, 1fr)); gap:20px;}
+  .job-card{border-radius:16px; padding:20px; cursor:pointer; position:relative; overflow:hidden; transition:all .3s cubic-bezier(0.25, 0.8, 0.25, 1);}
+  .job-card:hover{border-color:rgba(255,255,255,0.25); transform: translateY(-2px);}
+  .job-card.selected{border-color:var(--cyan); box-shadow:0 0 24px rgba(6,182,212,.2); background:linear-gradient(180deg, rgba(15,23,42,0.8) 0%, rgba(6,182,212,0.05) 100%);}
+  
+  .card-top{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:12px;}
+  .card-icon{font-size:32px; line-height:1;}
+  .card-info-group { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .card-time{font-size:14px; font-weight:700; color:var(--cyan); background:rgba(6,182,212,.1); padding:6px 10px; border-radius:8px; display:flex; align-items:center; gap:6px; border:1px solid rgba(6,182,212,.2);}
+  .dial-icon{display:none; font-size:16px;}
+  .job-card.selected .dial-icon{display:inline-block; animation:spin 4s linear infinite;}
+  .last-updated{font-size:13px; color:var(--muted); font-weight:600; display:flex; align-items:center; gap:4px;}
+  .last-updated::before{content:'⏱️'; font-size:12px;}
+
+  .merged-text { font-size: 16px; color: var(--muted); line-height: 1.5; margin-bottom: 16px;}
+  .merged-text .big-title { font-size: 22px; font-weight: 800; color: var(--txt); display: block; margin-bottom: 2px;}
+  .merged-text .bold-keyword { color: var(--cyan); font-weight: 700;}
+
+  .schedule-row{display:flex; align-items:center; justify-content:space-between; font-size:15px; margin-bottom:8px;}
+  .schedule-label{color:var(--muted);}
+  .schedule-value{font-weight:700; color:var(--txt);}
+  .edit-btn{font-size:15px; font-weight:700; background:transparent; color:var(--blue); border:none; cursor:pointer; padding:4px 0; transition:color .2s;}
+  .edit-btn:hover{color:var(--cyan); text-shadow: 0 0 8px rgba(6,182,212,.5);}
+
+  /* --- NEW SLIDER EDIT PANEL --- */
+  .edit-panel{margin-top:12px; display:flex; flex-direction:column; gap:12px; border-top:1px solid var(--border); padding-top:16px; animation: fadeIn .3s ease-out;}
+  .slider-container{display:flex; flex-direction:column; gap:8px;}
+  .slider-header{display:flex; justify-content:space-between; font-size:14px; font-weight:700; color:var(--muted);}
+  .slider-header span{color:var(--cyan); font-size:16px;}
+  
+  input[type=range].card-slider{-webkit-appearance:none; width:100%; height:8px; border-radius:8px; background:rgba(255,255,255,0.1); outline:none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);}
+  input[type=range].card-slider::-webkit-slider-thumb{-webkit-appearance:none; width:24px; height:24px; border-radius:50%; background:var(--cyan); border:3px solid #fff; cursor:grab; box-shadow: 0 0 10px rgba(6,182,212,.6); transition: transform .1s;}
+  input[type=range].card-slider::-webkit-slider-thumb:active{transform: scale(1.2); cursor: grabbing;}
+
+  .btn-group{display:flex; gap:8px; align-items: center; margin-top: 8px;}
+  .btn-update{background:linear-gradient(135deg, var(--green), #059669); color:white; padding:10px 20px; border-radius:8px; font-size:15px; font-weight:800; border:none; cursor:pointer; margin-right:auto; box-shadow: 0 4px 12px rgba(16,185,129,.3); transition: transform .1s;}
+  .btn-update:active{transform: scale(0.95);}
+  .btn-save{background:linear-gradient(135deg, var(--blue), #2563eb); color:white; padding:10px 20px; border-radius:8px; font-size:15px; font-weight:700; border:none; cursor:pointer; transition: transform .1s;}
+  .btn-cancel{background:transparent; color:var(--muted); padding:10px 20px; border-radius:8px; font-size:15px; font-weight:700; border:1px solid var(--border); cursor:pointer;}
+
+  /* Fluid Progress Bar */
+  .progress-bar{position:absolute; bottom:0; left:0; right:0; height:6px; background:rgba(0,0,0,0.5);}
+  .progress-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--cyan), var(--blue), var(--cyan)); background-size: 200% 100%; animation: fluidMove 2s linear infinite;}
+  .job-card.running .progress-fill{box-shadow: 0 0 10px var(--blue);}
+  @keyframes fluidMove { 0% { background-position: 100% 0%; } 100% { background-position: -100% 0%; } }
+
+  /* --- SIDE PANEL --- */
+  .side-panel{display:flex; flex-direction:column; gap:24px; position:sticky; top:100px;}
+  .dial-card{border-radius:16px; padding:24px; transition:border-color .3s;}
+  .dial-card.active-dial { border-color:var(--cyan); }
+  .dial-header { font-size: 16px; font-weight: 700; color: var(--muted); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;}
+  .dial-header span { color: var(--cyan); }
+  .dial-top{display:flex; align-items:center; gap:24px; margin-bottom:24px;}
+  
+  .knob{width:120px; height:120px; filter: drop-shadow(0 0 16px rgba(6,182,212,0.2));}
+  .knob-track{fill:none; stroke:rgba(255,255,255,0.1); stroke-width:6;}
+  .knob-tick{stroke:rgba(255,255,255,0.2); stroke-width:4; stroke-linecap:round; transition:stroke .2s;}
+  .knob-tick.active{stroke:var(--cyan);}
+  .knob-body{fill:#0f172a; stroke:var(--border); stroke-width:4;}
+  .knob-needle{stroke:var(--cyan); stroke-width:6; stroke-linecap:round; transition:stroke .2s;}
+  .dial-info h3{font-size:36px; font-weight:800; color:var(--txt); margin-bottom:4px; line-height:1; text-shadow: 0 0 20px rgba(6,182,212,0.4);}
+  .dial-info p{font-size:16px; color:var(--muted); font-weight:600;}
+
+  .presets{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:20px;}
+  .preset{font-size:15px; font-weight:700; padding:10px 0; border-radius:8px; border:1px solid var(--border); background:rgba(0,0,0,0.3); cursor:pointer; color:var(--muted); transition:all .2s;}
+  .preset:hover{color:var(--txt); border-color:rgba(255,255,255,0.2);}
+  .preset.active{background:var(--cyan); color:var(--bg); border-color:var(--cyan); box-shadow: 0 0 16px rgba(6,182,212,.4);}
+  .btn-apply{width:100%; font-size:18px; font-weight:800; padding:16px; border-radius:12px; background:linear-gradient(135deg, var(--cyan), var(--blue)); color:white; border:none; cursor:pointer; box-shadow: 0 4px 16px rgba(6,182,212,0.3); transition:transform .1s;}
+  .btn-apply:active{transform: scale(0.97);}
+  
+  .feed-card{border-radius:16px; padding:0; overflow:hidden;}
+  .feed-header{padding:16px; border-bottom:1px solid var(--border); font-size:18px; font-weight:800; color:var(--txt);}
+  #activity-list{max-height:300px; overflow-y:auto; padding:0 16px;}
+  .activity-item{display:flex; gap:12px; padding:16px 0; border-bottom:1px solid var(--border); animation:slideIn .3s ease-out;}
+  .activity-item:last-child{border-bottom:none;}
+  .activity-icon{font-size:20px;}
+  .activity-title{font-size:16px; font-weight:700; margin-bottom:2px;}
+  .activity-desc{font-size:14px; color:var(--muted);}
+
+  /* --- SPLASH EFFECTS --- */
+  .splash-particle {position: absolute; width: 8px; height: 8px; background: var(--cyan); border-radius: 50%; pointer-events: none; z-index: 9999; box-shadow: 0 0 10px var(--cyan);}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+  @keyframes slideIn{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
+  @keyframes spin{100%{transform:rotate(360deg);}}
+  @keyframes fadeIn{from{opacity:0;} to{opacity:1;}}
+</style>
+</head>
+<body>
+<div class="bg-waves"></div>
+
+<header>
+  <div class="logo-area">
+    <div class="logo-icon">🏀</div>
+    <div>
+      <h1>Beer League Control Panel</h1>
+      <p class="sub">Select a card to change its schedule</p>
+    </div>
+  </div>
+  <div class="status-badge healthy" id="statusBadge">
+    <div class="dot"></div>
+    <span id="statusText">Website is Up to Date</span>
+  </div>
+</header>
+
+<main>
+  <section><div class="jobs-grid" id="jobsGrid"></div></section>
+  <aside class="side-panel">
+    <div class="dial-card active-dial" id="dialCard">
+      <div class="dial-header">🎛️ Controlling: <span id="dialTarget">Update Rosters</span></div>
+      <div class="dial-top">
+        <svg class="knob" viewBox="0 0 120 120" id="knob">
+          <circle class="knob-track" cx="60" cy="60" r="53"/>
+          <g id="ticks"></g>
+          <circle class="knob-body" cx="60" cy="60" r="37"/>
+          <g id="needleG" style="transform-origin:60px 60px">
+            <line class="knob-needle" x1="60" y1="60" x2="60" y2="25"/>
+          </g>
+        </svg>
+        <div class="dial-info"><h3 id="dialValue">15m</h3><p>Runs every</p></div>
+      </div>
+      <input type="range" id="dial" min="0" max="9" value="2" />
+      <div class="presets" id="presets">
+        <button class="preset" data-i="0">1m</button><button class="preset" data-i="1">5m</button>
+        <button class="preset active" data-i="2">15m</button><button class="preset" data-i="3">30m</button>
+        <button class="preset" data-i="4">1h</button><button class="preset" data-i="5">6h</button>
+        <button class="preset" data-i="6">12h</button><button class="preset" data-i="7">24h</button>
+        <button class="preset" data-i="8">48h</button><button class="preset" data-i="9">1w</button>
+      </div>
+      <button class="btn-apply" id="apply">Save Schedule to Card</button>
+    </div>
+
+    <div class="feed-card">
+      <div class="feed-header">Recent Activity</div>
+      <div id="activity-list"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+// --- SPLASH ANIMATION LOGIC ---
+function createSplash(e) {
+    const rect = e.target.getBoundingClientRect();
+    const x = e.clientX || (rect.left + rect.width / 2);
+    const y = e.clientY || (rect.top + rect.height / 2);
+    
+    for (let i = 0; i < 12; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'splash-particle';
+        document.body.appendChild(particle);
+        
+        particle.style.left = x + 'px';
+        particle.style.top = y + 'px';
+        
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 30 + Math.random() * 60;
+        
+        anime({
+            targets: particle,
+            translateX: Math.cos(angle) * distance,
+            translateY: Math.sin(angle) * distance,
+            scale: [1.5, 0],
+            opacity: [1, 0],
+            duration: 600 + Math.random() * 300,
+            easing: 'easeOutExpo',
+            complete: () => particle.remove()
+        });
+    }
+}
+
+// --- DATA & STATE ---
+const DIAL_STEPS = [
+  { label:'1m', minutes:1 }, { label:'5m', minutes:5 }, { label:'15m', minutes:15 },
+  { label:'30m', minutes:30 }, { label:'1h', minutes:60 }, { label:'6h', minutes:360 },
+  { label:'12h', minutes:720 }, { label:'24h', minutes:1440 }, { label:'48h', minutes:2880 },
+  { label:'1w', minutes:10080 }
+];
+
+const JOBS = [
+  { id:'status', icon:'🩺', title:'Check Health', desc:'Looks at the website to make sure everything is working.', tags:'Health, Last Run', schedule:'Every 5 Mins', lastUpdated:'Just now', freqIndex:1 },
+  { id:'moves', icon:'🏃', title:'Update Rosters', desc:'Fetches new players and trades from ESPN.', tags:'Rosters, Trades, Tiers', schedule:'Every 15 Mins', lastUpdated:'12 mins ago', freqIndex:2 },
+  { id:'stats', icon:'📊', title:'Live Scores', desc:'Updates scores, box scores, and player leaders.', tags:'Scores, Box Scores, Leaders', schedule:'Every 5 Mins', lastUpdated:'3 mins ago', freqIndex:1 },
+  { id:'postgame', icon:'🏆', title:'Wrap Up Games', desc:'Finalizes standings and rankings after games end.', tags:'Standings, Rankings, Backup', schedule:'Daily at 11:30 PM', lastUpdated:'14 hours ago', freqIndex:7 },
+  { id:'nightly', icon:'🌅', title:'Morning Refresh', desc:'Updates the entire website for the new day.', tags:'Everything, Backup', schedule:'Daily at 5:00 AM', lastUpdated:'18 hours ago', freqIndex:7 },
+  { id:'interval', icon:'⏱️', title:'Roster Speed', desc:'Changes how often we check for trades.', tags:'Speed, Polling', schedule:'Every 15 Mins', lastUpdated:'12 mins ago', freqIndex:2 }
+];
+
+const jobsGrid = document.getElementById('jobsGrid');
+const activityList = document.getElementById('activity-list');
+const statusBadge = document.getElementById('statusBadge');
+const statusText = document.getElementById('statusText');
+const dialTarget = document.getElementById('dialTarget');
+let selectedJobId = 'moves';
+
+// --- RENDER CARDS ---
+function renderCards() {
+  jobsGrid.innerHTML = JOBS.map(j => `
+    <div class="job-card ${j.id === selectedJobId ? 'selected' : ''}" data-id="${j.id}">
+      <div class="card-top">
+        <div class="card-icon">${j.icon}</div>
+        <div class="card-info-group">
+          <div class="card-time"><span class="dial-icon">🎛️</span><span class="schedule-text">${j.schedule}</span></div>
+          <div class="last-updated">Updated: ${j.lastUpdated}</div>
+        </div>
+      </div>
+      
+      <div class="merged-text">
+        <span class="big-title">${j.title}</span>
+        ${j.desc} Updates: <span class="bold-keyword">${j.tags}</span>.
+      </div>
+
+      <div class="schedule-row">
+        <span class="schedule-label">Schedule:</span>
+        <span class="schedule-value">${j.schedule}</span>
+        <button class="edit-btn">Edit</button>
+      </div>
+      
+      <div class="edit-panel" hidden>
+        <div class="slider-container">
+          <div class="slider-header">
+            <span>Frequency</span>
+            <span class="slider-label">Every 15 Mins</span>
+          </div>
+          <input type="range" class="card-slider" min="0" max="9" value="${j.freqIndex}" />
+        </div>
+        <div class="btn-group">
+          <button class="btn-update">Update</button>
+          <button class="btn-cancel">Cancel</button>
+          <button class="btn-save">Save</button>
+        </div>
+      </div>
+      
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    </div>
+  `).join('');
+  
+  attachCardListeners();
+}
+
+function attachCardListeners() {
+  document.querySelectorAll('.job-card').forEach(card => {
+    const id = card.dataset.id;
+    
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('input')) return;
+      selectJob(id);
+    });
+
+    // Inline Slider Logic
+    const panel = card.querySelector('.edit-panel');
+    const slider = panel.querySelector('.card-slider');
+    const sliderLabel = panel.querySelector('.slider-label');
+
+    slider.addEventListener('input', (e) => {
+       const step = DIAL_STEPS[e.target.value];
+       sliderLabel.innerText = `Every ${step.label}`;
+    });
+
+    // Update Button
+    card.querySelector('.btn-update').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      createSplash(e); // TRIGGER SPLASH
+      
+      const job = JOBS.find(j => j.id === id);
+      if (card.classList.contains('running')) return;
+
+      card.classList.add('running');
+      statusBadge.className = 'status-badge running';
+      statusText.innerText = `Updating ${job.title}...`;
+
+      const fill = card.querySelector('.progress-fill');
+      fill.style.width = '0%';
+      const creep = anime({ targets: fill, width: '85%', duration: 8000, easing: 'linear' });
+
+      try {
+        const res = await fetch('/api/run/' + id, { method: 'POST' });
+        if (!res.ok || !res.body) throw new Error('Server error');
+        const reader = res.body.getReader();
+        while (true) { const { done } = await reader.read(); if (done) break; }
+      } catch (err) {
+        addActivity('❌', 'Connection Error', 'Is the Python server running?');
+      }
+
+      creep.pause();
+      anime({ targets: fill, width: '100%', duration: 200 });
+
+      setTimeout(() => {
+        card.classList.remove('running');
+        statusBadge.className = 'status-badge healthy';
+        statusText.innerText = 'Website is Up to Date';
+        job.lastUpdated = 'Just now';
+        card.querySelector('.last-updated').innerText = 'Updated: Just now';
+        addActivity('✅', 'Success', `${job.title} finished!`);
+        anime({ targets: fill, width: '0%', duration: 300 });
+      }, 500);
+    });
+
+    // Edit Panel Toggle
+    card.querySelector('.edit-btn').addEventListener('click', (e) => { 
+      e.stopPropagation(); 
+      panel.hidden = !panel.hidden; 
+    });
+    
+    card.querySelector('.btn-cancel').addEventListener('click', (e) => { 
+      e.stopPropagation(); 
+      panel.hidden = true; 
+      slider.value = JOBS.find(j => j.id === id).freqIndex; // Reset slider
+      sliderLabel.innerText = `Every ${DIAL_STEPS[slider.value].label}`;
+    });
+
+    // Save Button
+    card.querySelector('.btn-save').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      createSplash(e); // TRIGGER SPLASH
+
+      const newIndex = parseInt(slider.value);
+      const step = DIAL_STEPS[newIndex];
+      const newText = `Every ${step.label}`;
+
+      updateJobSchedule(id, newText, newIndex);
+      panel.hidden = true;
+      addActivity('📅', 'Schedule Updated', `${JOBS.find(j=>j.id===id).title} is now set to ${newText}`);
+
+      try {
+        await fetch('/api/schedules/' + id, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'interval', text: newText, mins: step.minutes })
+        });
+      } catch (err) { console.log('Failed to save to server'); }
+    });
+  });
+}
+
+// --- CORE LOGIC ---
+function selectJob(id) {
+  selectedJobId = id;
+  const job = JOBS.find(j => j.id === id);
+  document.querySelectorAll('.job-card').forEach(c => c.classList.remove('selected'));
+  document.querySelector(`.job-card[data-id="${id}"]`).classList.add('selected');
+  dialTarget.innerText = job.title;
+  setDial(job.freqIndex);
+}
+
+function updateJobSchedule(id, text, index) {
+  const job = JOBS.find(j => j.id === id);
+  job.schedule = text; job.freqIndex = index;
+  const card = document.querySelector(`.job-card[data-id="${id}"]`);
+  card.querySelector('.card-time .schedule-text').innerText = text;
+  card.querySelector('.schedule-value').innerText = text;
+  if (id === selectedJobId) setDial(index);
+}
+
+function addActivity(icon, title, desc) {
+  const item = document.createElement('div');
+  item.className = 'activity-item';
+  item.innerHTML = `<div class="activity-icon">${icon}</div><div class="activity-content"><div class="activity-title">${title}</div><div class="activity-desc">${desc} · ${new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' })}</div></div>`;
+  activityList.prepend(item);
+  if (activityList.children.length > 15) activityList.lastChild.remove();
+}
+
+// --- MASTER DIAL ---
+const LAST = DIAL_STEPS.length - 1;
+const dial = document.getElementById('dial'); 
+const dialValue = document.getElementById('dialValue');
+const needleG = document.getElementById('needleG'); 
+const ticksG = document.getElementById('ticks');
+const presets = document.getElementById('presets');
+
+for (let i = 0; i <= LAST; i++){
+  const a  = (-135 + i * (270 / LAST)) * Math.PI / 180;
+  ticksG.insertAdjacentHTML('beforeend', `<line class="knob-tick" data-i="${i}" x1="${60 + Math.sin(a) * 45}" y1="${60 - Math.cos(a) * 45}" x2="${60 + Math.sin(a) * 53}" y2="${60 - Math.cos(a) * 53}"/>`);
+}
+
+let currentStep = 2; let currentRot = 0;
+function setDial(i, animate = true){
+  currentStep = Math.max(0, Math.min(LAST, i));
+  const step = DIAL_STEPS[currentStep];
+  dial.value = currentStep; dialValue.innerText = step.label;
+  const rot = -135 + (currentStep / LAST) * 270;
+  if (animate) anime({ targets: { r: currentRot }, r: rot, duration: 300, easing:'easeOutCubic', update(a){ needleG.style.transform = `rotate(${a.animations[0].currentValue}deg)`; }});
+  else needleG.style.transform = `rotate(${rot}deg)`;
+  currentRot = rot;
+  [...ticksG.children].forEach(t => t.classList.toggle('active', Number(t.dataset.i) <= currentStep));
+  [...presets.children].forEach(b => b.classList.toggle('active', Number(b.dataset.i) === currentStep));
+}
+
+dial.addEventListener('input', e => setDial(Number(e.target.value)));
+presets.addEventListener('click', (e) => { 
+  createSplash(e);
+  const b = e.target.closest('.preset'); 
+  if (b) setDial(Number(b.dataset.i)); 
+});
+
+document.getElementById('apply').addEventListener('click', async (e) => {
+  createSplash(e);
+  const step = DIAL_STEPS[currentStep];
+  const job = JOBS.find(j => j.id === selectedJobId);
+  updateJobSchedule(selectedJobId, `Every ${step.label}`, currentStep);
+  addActivity('⚡', 'Speed Updated', `${job.title} is now set to every ${step.label}`);
+  anime({ targets: '#apply', scale: [1, 0.95, 1], duration: 200 });
+  
+  try {
+    await fetch('/api/schedules/' + selectedJobId, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'interval', text: `Every ${step.label}`, mins: step.minutes })
+    });
+  } catch (err) {}
+});
+
+// --- BOOT ---
+renderCards();
+setDial(2, false);
+addActivity('🏀', 'System Ready', 'Welcome to the control panel.');
+anime({ targets: '.job-card', translateY: [20, 0], opacity: [0, 1], delay: anime.stagger(50), duration: 600, easing: 'easeOutExpo' });
+
+// --- HEARTBEAT LOGIC ---
+setInterval(() => { fetch('/api/ping').catch(()=>{}); }, 2000);
+</script>
+</body>
+</html>

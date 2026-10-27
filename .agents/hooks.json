@@ -1,0 +1,16 @@
+{
+  "beer-league-worker-guard": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -File ..\\scripts\\worker-guard.ps1",
+            "timeout": 900
+          }
+        ]
+      }
+    ]
+  }
+}

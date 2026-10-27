@@ -7,7 +7,7 @@ import { ESPN } from "../../lib/espn";
 import { TIER_EMOJI, TIER_NAME } from "../../lib/tiers";
 import {
   HEAT, HEAT_NAME, MODEL_NAME, NBA_INJURY_REPORT, SPLITS, SPLIT_NAME, avatarSrc, asSplit, formula, headshotSrc, injuryText,
-  isHurt, leagueModel, nbaPage, playerRow, pointsNeighbours,
+  isHurt, leagueModel, nbaPage, playerRow, pointsNeighbours, portraitSrc,
 } from "../../lib/players";
 
 const id = Astro.params.id ?? "";
@@ -58,8 +58,9 @@ const q = (m: string, s: string) => `?model=${m}&split=${s}`;
   {/* Compact top (Jason 2026-10-26): photo, name, tier and the numbers in a few short rows, so the sections below show without scrolling. */}
   <article class={`pcard pcard-compact pcard-${tier.toLowerCase()}`}>
     <div class="pcard-top">
-      {p.photo && headshotSrc(p.nba_id, true) &&
-        <img class="pcard-face" src={headshotSrc(p.nba_id)} alt={p.name} width="260" height="190" onerror="this.remove()">}
+      {p.photo && (portraitSrc(p.nba_id) ?? headshotSrc(p.nba_id)) &&
+        <img class={portraitSrc(p.nba_id) ? "pcard-face portrait" : "pcard-face"}
+          src={portraitSrc(p.nba_id) ?? headshotSrc(p.nba_id)} alt={p.name} width="260" height="190" onerror="this.remove()">}
       <div class="pcard-name">
         <h1>{p.name}</h1>
         <p class="muted">{p.nba ?? "Free agent"} · {(p.pos || []).join(" / ") || "–"}

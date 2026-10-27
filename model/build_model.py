@@ -1,10 +1,11 @@
-"""Power-ranking model for the draft-day tiers. Copy of beer-league-sample/build_model.py (steps 1-7 unchanged).
+"""Power-ranking model (steps 1-7 unchanged).
 
-Window (from pull_draft.py): each team's 2026-27 preseason games first (newest), then 2025-26 regular-season
-games, skipping each team's last 5 regular-season games; play-in and playoffs never included. 20 games per team.
-Preseason games without hustle / defensive / tracking box scores still count: they are scored on boosted
+By default, builds the nightly in-season rankings from model/data_season/ (each team's last 20 games of
+the 2026-27 regular season, from pull_season.py) and writes the 4 ranking CSVs to model/out_season/.
+Pass --draft to run on the frozen draft-day window (model/data/ -> model/out_draft/).
+Games without hustle / defensive / tracking box scores still count: they are scored on boosted
 Game Score, and their missing defense stats are left out of the defense averages (as the sample already did
-for any missing source). Reads model/data/, writes the 4 ranking CSVs to model/out_draft/.
+for any missing source).
 """
 import os
 import re
@@ -17,8 +18,9 @@ import pandas as pd
 
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = Path(__file__).resolve().parent
-IN = HERE / "data"
-OUT = HERE / "out_draft"
+DRAFT_MODE = "--draft" in sys.argv[1:]
+IN = HERE / ("data" if DRAFT_MODE else "data_season")
+OUT = HERE / ("out_draft" if DRAFT_MODE else "out_season")
 OUT.mkdir(exist_ok=True)
 # Minutes Power: a block counts only with this many qualifying minutes (default 30; 0 = no minimum).
 # With a minimum, Minutes outputs get a suffix (e.g. _min30).
@@ -172,7 +174,7 @@ if rows:
     add(pd.DataFrame(rows), "PF")
 
 ev = pd.concat(ev, ignore_index=True)
-ev = ev[[(g, p) in in_box for g, p in zip(ev.GAME_ID, ev.personId)]]  # drop team/coach rows
+ev = ev[pd.Series([(g, p) in in_box for g, p in zip(ev.GAME_ID, ev.personId)], index=ev.index, dtype=bool)]  # drop team/coach rows
 ev["wm"] = ev.w * ev.mult
 agg = ev.groupby(["GAME_ID", "personId", "stat"]).agg(w=("w", "sum"), wm=("wm", "sum")).reset_index()
 agg["m"] = agg.wm / agg.w
@@ -187,7 +189,7 @@ for s in STATS:
     pg["n_" + s] = pg.get("n_" + s, pd.Series(np.nan, index=pg.index)).fillna(0)
     pg["b_" + s] = pg[s] * pg["m_" + s]
     match.append({"stat": s, "box_total": pg[s].sum(), "pbp_matched": pg["n_" + s].sum(),
-                  "share": pg["n_" + s].sum() / pg[s].sum(),
+                  "share": pg["n_" + s].sum() / pg[s].sum() if pg[s].sum() else np.nan,
                   "player_games_exact": (pg["n_" + s] == pg[s]).mean()})
 match = pd.DataFrame(match)
 
@@ -222,7 +224,7 @@ for _, r in pbp[(pbp.actionType == "Foul") & (pbp.subType == "Double Technical")
         if pid is not None:
             pen.append((r.GAME_ID, pid, -2))
 pen = pd.DataFrame(pen, columns=["GAME_ID", "personId", "pen"])
-pen = pen[[(g, p) in in_box for g, p in zip(pen.GAME_ID, pen.personId)]]
+pen = pen[pd.Series([(g, p) in in_box for g, p in zip(pen.GAME_ID, pen.personId)], index=pen.index, dtype=bool)]
 pg = pg.merge(pen.groupby(["GAME_ID", "personId"]).pen.sum().rename("penalties").reset_index(),
               on=["GAME_ID", "personId"], how="left")
 pg["penalties"] = pg.penalties.fillna(0)
@@ -232,8 +234,8 @@ pg["FP"] = pg.FP_box + pg.bonus_multicat + pg.bonus_win + pg.penalties
 hus = read("boxscorehustlev2_PlayerStats.csv")[["GAME_ID", "personId"] + DEF[:5]]
 dfn = read("boxscoredefensivev2_PlayerStats.csv")
 trk = read("boxscoreplayertrackv3_PlayerStats.csv")
-lgFG = dfn.matchupFieldGoalsMade.sum() / dfn.matchupFieldGoalsAttempted.sum()
-lgRim = trk.defendedAtRimFieldGoalsMade.sum() / trk.defendedAtRimFieldGoalsAttempted.sum()
+lgFG = dfn.matchupFieldGoalsMade.sum() / dfn.matchupFieldGoalsAttempted.sum() if dfn.matchupFieldGoalsAttempted.sum() else np.nan
+lgRim = trk.defendedAtRimFieldGoalsMade.sum() / trk.defendedAtRimFieldGoalsAttempted.sum() if trk.defendedAtRimFieldGoalsAttempted.sum() else np.nan
 dfn["fgSaved"] = lgFG * dfn.matchupFieldGoalsAttempted - dfn.matchupFieldGoalsMade
 trk["rimSaved"] = lgRim * trk.defendedAtRimFieldGoalsAttempted - trk.defendedAtRimFieldGoalsMade
 pg = pg.merge(hus, on=["GAME_ID", "personId"], how="left")
@@ -278,6 +280,7 @@ wk = q.groupby(["personId", "block"]).apply(
 wk["defpts"], wk_pools = defense_points(wk, DEF)
 wk["nba"] = wk.GS + wk.defpts
 
+
 # ---------- STEP 6: Minutes Power ----------
 def totals(g):
     d = {"nq": len(g), "min": g.MIN.sum(), "GS48": 48 * g.GS.sum() / g.MIN.sum(),
@@ -319,7 +322,7 @@ for k in ("Minutes NBA", "Minutes Fantasy"):
     ranks[k]["under_100_total_min"] = ranks[k].total_minutes < 100
     if BLOCK_MIN:
         ok = mn[mn["min"] >= BLOCK_MIN]
-        pid = ranks[k].player.map(info.reset_index().set_index("player").personId)
+        pid = ranks[k].player.map(info.reset_index().drop_duplicates("player").set_index("player").personId)
         ranks[k]["counted_blocks"] = pid.map(ok.groupby("personId").block.count())
         ranks[k]["counted_block_minutes"] = pid.map(ok.groupby("personId")["min"].sum()).round(1)
 print("Minutes Power eligible players (>=1 counted block):", mn[mn["min"] >= BLOCK_MIN].personId.nunique())

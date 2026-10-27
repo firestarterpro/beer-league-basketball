@@ -40,10 +40,17 @@
       .toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "";
     return [part, back].filter(Boolean).join(" · ");
   };
-  // NBA.com headshot (same URL as lib/players.ts headshotSrc) for players photoSql allows; an empty circle otherwise.
-  const face = (r) => r.photo && r.nba_id
-    ? `<img class="face" src="https://cdn.nba.com/headshots/nba/latest/260x190/${Number(r.nba_id)}.png" alt="" width="30" height="30" loading="lazy" onerror="this.style.visibility='hidden'">`
-    : `<span class="face" aria-hidden="true"></span>`;
+  // Portrait from public/img/players/portraits.json (baked into the page at build time) when the player
+  // has one, else the NBA.com headshot (same URL as lib/players.ts headshotSrc); an empty circle otherwise.
+  // photoSql (applied server-side in playerRows) governs who gets a picture at all.
+  const face = (r) => {
+    if (!r.photo || !r.nba_id) return `<span class="face" aria-hidden="true"></span>`;
+    const id = Number(r.nba_id);
+    const isPortrait = (data.portraitIds ?? []).includes(id);
+    const src = isPortrait ? `/img/players/portrait-${id}.webp`
+      : `https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png`;
+    return `<img class="face" src="${src}" alt="" width="30" height="30" loading="lazy"${isPortrait ? "" : ` onerror="this.style.visibility='hidden'"`}>`;
+  };
   const mpg = (r) => (r.gp && n(r.t.min) != null ? n(r.t.min) / r.gp : null);
   // Places moved since the last run of the "Rank by" list (positive = up). null = no earlier list.
   const move = (r) => {

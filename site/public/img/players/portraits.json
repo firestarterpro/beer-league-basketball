@@ -1,0 +1,202 @@
+[
+  {
+    "nba_person_id": 1641705,
+    "player": "Victor Wembanyama",
+    "team": "SAS",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1629029,
+    "player": "Luka Dončić",
+    "team": "LAL",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 203999,
+    "player": "Nikola Jokić",
+    "team": "DEN",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1628983,
+    "player": "Shai Gilgeous-Alexander",
+    "team": "OKC",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1628389,
+    "player": "Bam Adebayo",
+    "team": "MIA",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 203954,
+    "player": "Joel Embiid",
+    "team": "PHI",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 201142,
+    "player": "Kevin Durant",
+    "team": "HOU",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 202695,
+    "player": "Kawhi Leonard",
+    "team": "LAC",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1627750,
+    "player": "Jamal Murray",
+    "team": "DEN",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1631105,
+    "player": "Jalen Duren",
+    "team": "DET",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 203507,
+    "player": "Giannis Antetokounmpo",
+    "team": "MIL",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1628378,
+    "player": "Donovan Mitchell",
+    "team": "CLE",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1626157,
+    "player": "Karl-Anthony Towns",
+    "team": "NYK",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1641708,
+    "player": "Amen Thompson",
+    "team": "HOU",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1626164,
+    "player": "Devin Booker",
+    "team": "PHX",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1629645,
+    "player": "Kevin Porter Jr.",
+    "team": "MIL",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1630178,
+    "player": "Tyrese Maxey",
+    "team": "PHI",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 2544,
+    "player": "LeBron James",
+    "team": "LAL",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1628973,
+    "player": "Jalen Brunson",
+    "team": "NYK",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1629638,
+    "player": "Nickeil Alexander-Walker",
+    "team": "ATL",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1630596,
+    "player": "Evan Mobley",
+    "team": "CLE",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1642843,
+    "player": "Cooper Flagg",
+    "team": "DAL",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1627759,
+    "player": "Jaylen Brown",
+    "team": "BOS",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1628369,
+    "player": "Jayson Tatum",
+    "team": "BOS",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  },
+  {
+    "nba_person_id": 1630166,
+    "player": "Deni Avdija",
+    "team": "POR",
+    "added": "2026-10-27",
+    "source": "2025-26 weekly_nba + weekly_fantasy top 25",
+    "active": true
+  }
+]

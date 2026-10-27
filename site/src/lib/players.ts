@@ -2,6 +2,11 @@
 // totals, fantasy points under every scoring model, heat ranks (and how they moved
 // since the last run) and NBA.com defense.
 import { one, query } from "./db";
+// Portrait manifest: public/img/players/portraits.json (portrait-<nba_person_id>.webp files).
+// Bundled at build time — Cloudflare Workers have no file system at request time,
+// and new portraits show up from the manifest alone with no code change.
+import playerPortraits from "../../public/img/players/portraits.json";
+const PORTRAITS: { nba_person_id: number }[] = playerPortraits as { nba_person_id: number }[];
 
 export const SPLITS = ["season", "last7", "last15", "last30", "projected"] as const;
 export type Split = (typeof SPLITS)[number];
@@ -39,6 +44,12 @@ export const avatarSrc = (abv?: string | null) => (abv && TEAM_ART[abv] ? `/img/
 export const headshotSrc = (nbaId?: number | null, big = false) =>
   nbaId ? `https://cdn.nba.com/headshots/nba/latest/${big ? "1040x760" : "260x190"}/${nbaId}.png` : null;
 export const nbaPage = (nbaId?: number | null) => (nbaId ? `https://www.nba.com/player/${nbaId}` : null);
+// Player cartoon portrait from public/img/players/portraits.json, or null when the player has none.
+// The headshot rule (photoSql) still decides whether the player gets a picture at all.
+export const portraitSrc = (nbaId?: number | null) =>
+  nbaId != null && PORTRAITS.some((p) => p.nba_person_id === nbaId)
+    ? `/img/players/portrait-${nbaId}.webp`
+    : null;
 // Photos only for players on a 2026-27 NBA roster who are playing or hurt: an NBA.com id (nba_sync.py link
 // only gives ids from NBA.com's current-season roster list), an NBA team at ESPN (not FA), and an ESPN
 // status of active or one of the injury ones. Free agents, retirees and suspended players get no photo.

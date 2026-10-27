@@ -142,6 +142,38 @@ def main():
           r.clean_schedule({"stats_every": "2", "postgame_delay": "45", "paused": ["stats", "nope"], "moves_every": None})
           == {"postgame_delay": 45, "paused": ["stats"]})
 
+    # run_heat: skips when BUILD_MODEL_DIR is unset; runs pull -> build -> publish (and finishes if pull fails)
+    orig_dir = r.os.environ.get("BUILD_MODEL_DIR")
+    orig_run, orig_log = r.run_script, r.log
+    try:
+        calls, logs = [], []
+        r.log = lambda now, text: logs.append(text)
+        r.run_script = lambda now, args: (calls.append(args) or True)
+        r.os.environ.pop("BUILD_MODEL_DIR", None)
+        check("run_heat skips cleanly when BUILD_MODEL_DIR unset", r.run_heat(at(15, "12:00")) is True and calls == [])
+
+        calls.clear()
+        r.os.environ["BUILD_MODEL_DIR"] = r"C:\model"
+        ok = r.run_heat(at(15, "12:00"))
+        check("run_heat runs pull, build, then publish on out_season",
+              ok is True and calls == [[r"C:\model\pull_season.py"], [r"C:\model\build_model.py"],
+                                       ["publish_rankings.py", r"C:\model\out_season"]],
+              str(calls))
+
+        calls.clear()
+        logs.clear()
+        r.run_script = lambda now, args: (calls.append(args) or ("pull_season" not in args[0]))
+        ok = r.run_heat(at(15, "12:00"))
+        check("run_heat logs failed pull and still runs build and publish",
+              ok is False and len(calls) == 3 and any("pull_season.py failed" in m for m in logs),
+              str(logs))
+    finally:
+        r.run_script, r.log = orig_run, orig_log
+        if orig_dir is None:
+            r.os.environ.pop("BUILD_MODEL_DIR", None)
+        else:
+            r.os.environ["BUILD_MODEL_DIR"] = orig_dir
+
     print(f"{sum(results)} passed, {len(results) - sum(results)} failed")
 
 
