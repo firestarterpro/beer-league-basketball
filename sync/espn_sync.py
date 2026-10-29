@@ -363,6 +363,9 @@ def cmd_scores(league, conn, args):
                              else max(1, league.scoringPeriodId - 1))
     data = raw(league, ["mRoster"], scoring_period=period)
     schedule = league._get_pro_schedule(period)
+    # Players with no game that day still get a lineup row, dated by the period's games.
+    period_day = (min((ms_to_date(d) for _, d in schedule.values()), default=None)
+                  or date.today() - timedelta(days=1))
     with conn.cursor() as cur:
         teams = team_map(cur)
         cur.execute("SELECT setting_value FROM league_settings WHERE setting_key = 'scoring_model'")
@@ -374,9 +377,8 @@ def cmd_scores(league, conn, args):
                 p = e["playerPoolEntry"]["player"]
                 pid = str(p["id"])
                 upsert_player(cur, p)
-                game = (schedule.get(p.get("proTeamId")) or {}).get(str(period))
-                game = game[0] if game else None
-                game_date = ms_to_date(game["date"]) if game else date.today() - timedelta(days=1)
+                game = schedule.get(p.get("proTeamId"))   # espn_api: proTeamId -> (opponent proTeamId, date ms)
+                game_date = ms_to_date(game[1]) if game else period_day
                 if team_id:
                     cur.execute(
                         """INSERT INTO lineups (team_id, game_date, position_slot, player_id, locked)
@@ -396,7 +398,7 @@ def cmd_scores(league, conn, args):
                        VALUES (%s, %s, %s, %s, %s, %s)
                        ON CONFLICT (player_id, game_id) DO UPDATE SET
                            stat_line = EXCLUDED.stat_line, fantasy_points = EXCLUDED.fantasy_points""",
-                    (pid, str(game.get("id", f"{period}-{p.get('proTeamId')}")), game_date,
+                    (pid, f"{period}-{min(p['proTeamId'], game[0])}-{max(p['proTeamId'], game[0])}", game_date,
                      json.dumps(stat_line), split.get("appliedTotal"), model),
                 )
                 lines += 1

@@ -1,0 +1,214 @@
+---
+// Compare teams: two fantasy teams over the same window (Today / This week / Season), then every
+// player's contribution. Season-long points league: this is a side-by-side, not a scheduled matchup.
+import Base from "../layouts/Base.astro";
+import { query } from "../lib/db";
+import { MODEL_NAME, leagueModel } from "../lib/players";
+import {
+  STAT_LABEL, TEAM_STATS, WINDOWS, asWindow, better, breakdown, contributions, rebounds, round1, share, teamTotals, windowRange,
+} from "../lib/compare";
+
+const url = Astro.url;
+const win = asWindow(url.searchParams.get("w"));
+const range = windowRange(win);
+const [teams, model, fresh, standings] = await Promise.all([
+  query<{ team_id: string; team_name: string }>(`SELECT team_id::text AS team_id, team_name FROM teams WHERE active ORDER BY espn_team_id NULLS LAST, team_name`),
+  leagueModel(),
+  query(`SELECT max(created_at) AS at FROM scoring_ledger`),
+  query(`SELECT team_id::text AS team_id, total_points::float AS points FROM standings`),
+]);
+const ids = new Set(teams.map((t) => t.team_id));
+const a = ids.has(url.searchParams.get("a") ?? "") ? url.searchParams.get("a")! : "";
+const b = ids.has(url.searchParams.get("b") ?? "") ? url.searchParams.get("b")! : "";
+const same = a && a === b;
+const ready = a && b && !same;
+const weights = ready
+  ? await query<{ stat: string; points: number }>(`SELECT stat, points::float AS points FROM scoring_models WHERE model_key = $1 ORDER BY points DESC, stat`, [model])
+  : [];
+const players = ready ? await contributions([a, b], model, range.from, range.to) : [];
+const name = (id: string) => teams.find((t) => t.team_id === id)?.team_name ?? "";
+const side = (id: string) => {
+  const list = players.filter((p) => p.team_id === id).sort((x, y) => y.fantasy - x.fantasy || x.name.localeCompare(y.name));
+  return { id, name: name(id), list, ...teamTotals(list) };
+};
+const A = ready ? side(a) : null, B = ready ? side(b) : null;
+const diff = A && B ? round1(A.fantasy - B.fantasy) : 0;
+const espnStanding = (id: string) => standings.find((s) => s.team_id === id)?.points ?? null;
+const lastSync = fresh[0]?.at ? new Date(fresh[0].at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Chicago" }) + " CT" : null;
+const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+const signed = (n: number) => (n > 0 ? `+${fmt(n)}` : fmt(n));
+const WIN_NAME = { today: "Today", week: "This week", season: "Season" };
+const verdictText = (who: "a" | "b" | "tie") => (who === "tie" ? "Tie" : `${who === "a" ? A!.name : B!.name} better`);
+---
+<Base title="Compare teams" active="/compare">
+  <section class="card cmp-pick">
+    <h1>Compare teams</h1>
+    <p class="muted small">This league is season-long total points, so there are no scheduled head-to-head games. Pick any two teams to see them side by side.</p>
+    <form method="get" class="cmp-form">
+      <label>First team
+        <select name="a" id="cmp-a" required>
+          <option value="">Pick a team</option>
+          {teams.map((t) => <option value={t.team_id} selected={t.team_id === a}>{t.team_name}</option>)}
+        </select>
+      </label>
+      <label>Second team
+        <select name="b" required>
+          <option value="">Pick a team</option>
+          {teams.map((t) => <option value={t.team_id} selected={t.team_id === b}>{t.team_name}</option>)}
+        </select>
+      </label>
+      <fieldset class="cmp-win">
+        <legend>Time period</legend>
+        {WINDOWS.map((w) => <label><input type="radio" name="w" value={w} checked={w === win} /> {WIN_NAME[w]}</label>)}
+      </fieldset>
+      <button class="primary" type="submit">Compare</button>
+    </form>
+    {same && <p class="cmp-note" role="alert">Pick two different teams.</p>}
+  </section>
+
+  {A && B && (
+    <>
+      <section class="card">
+        <h2>Fantasy points: {range.label}</h2>
+        <div class="cmp-score">
+          {[A, B].map((t) => (
+            <div class={`cmp-team${A.fantasy !== B.fantasy && t.fantasy === Math.max(A.fantasy, B.fantasy) ? " lead" : ""}`}>
+              <span class="cmp-name">{t.name}</span>
+              <b class="num cmp-big">{fmt(t.fantasy)}</b>
+              <span class="small muted">fantasy points &middot; {t.games} player-{t.games === 1 ? "game" : "games"} started</span>
+            </div>
+          ))}
+        </div>
+        <p class="cmp-lead">
+          {diff === 0 ? "The two teams are tied on fantasy points." : <><b>{diff > 0 ? A.name : B.name}</b> leads by <b class="num">{fmt(Math.abs(diff))}</b> fantasy points.</>}
+        </p>
+        <p class="muted small">
+          Fantasy points use the league's {MODEL_NAME[model] ?? model} scoring and count only games a player was in a starting slot for that team.
+          {range.from && <> Dates: {range.from} to {range.to} (Central time).</>}
+          {win === "week" && " A week here runs Monday through today."}
+          {" "}{lastSync ? <>Last stat sync: {lastSync}.</> : "No game stats have been synced yet."}
+        </p>
+        {win === "season" && [A, B].some((t) => espnStanding(t.id) != null && Math.abs((espnStanding(t.id) ?? 0) - t.fantasy) >= 0.5) && (
+          <p class="muted small">ESPN's standings total is different ({A.name}: {fmt(espnStanding(A.id) ?? 0)}, {B.name}: {fmt(espnStanding(B.id) ?? 0)}).
+            The site adds up the daily box scores it has synced; days the sync missed and ESPN's own settings can make the two differ.</p>
+        )}
+
+        <h3>Box score</h3>
+        <p class="muted small">Real basketball numbers from the same games. Winning a row here doesn't decide the fantasy lead above.</p>
+        <table class="cmp-table">
+          <thead><tr><th scope="col">Stat</th><th scope="col" class="num">{A.name}</th><th scope="col" class="num">{B.name}</th><th scope="col">Better</th></tr></thead>
+          <tbody>
+            {TEAM_STATS.map((s) => {
+              const va = s.get(A.box), vb = s.get(B.box), who = better(va, vb, s.lowerIsBetter);
+              return (
+                <tr>
+                  <th scope="row">{s.label}{s.lowerIsBetter && <span class="muted small"> (fewer is better)</span>}</th>
+                  <td class={`num${who === "a" ? " win" : ""}`}>{fmt(va)}</td>
+                  <td class={`num${who === "b" ? " win" : ""}`}>{fmt(vb)}</td>
+                  <td>{verdictText(who)}</td>
+                </tr>
+              );
+            })}
+            <tr><th scope="row">Player-games started</th><td class="num">{A.games}</td><td class="num">{B.games}</td><td class="muted">More games usually means more points</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <div class="cmp-cols">
+        {[A, B].map((t) => (
+          <section class="card">
+            <h2>{t.name}: player contributions</h2>
+            <p class="muted small">{range.label}. Sorted by fantasy points. Share = part of this team's {fmt(t.fantasy)} fantasy points.</p>
+            {t.list.length === 0 && <p class="muted">No started games with synced stats in this period.</p>}
+            <ul class="cmp-players">
+              {t.list.map((p) => {
+                const pct = share(p.fantasy, t.fantasy);
+                const bd = breakdown(p, weights);
+                return (
+                  <li>
+                    <details>
+                      <summary>
+                        <span class="cmp-pname"><a href={`/player/${encodeURIComponent(p.player_id)}`}>{p.name}</a>{!p.on_roster && <span class="muted small"> (no longer on this roster)</span>}</span>
+                        <b class={`num cmp-fp${p.fantasy < 0 ? " neg" : ""}`}>{signed(round1(p.fantasy))} <span class="small">fantasy pts</span></b>
+                        <span class="cmp-three small">
+                          <span>{fmt(p.totals.pts ?? 0)} {(p.totals.pts ?? 0) === 1 ? "point" : "points"} scored</span>
+                          <span>{fmt(rebounds(p.totals))} {rebounds(p.totals) === 1 ? "rebound" : "rebounds"}</span>
+                          <span>{fmt(p.totals.ast ?? 0)} {(p.totals.ast ?? 0) === 1 ? "assist" : "assists"}</span>
+                          <span>{p.games} {p.games === 1 ? "game" : "games"}</span>
+                        </span>
+                        {pct != null
+                          ? <span class="cmp-share"><span class="cmp-bar" style={`width:${Math.min(100, pct)}%`}></span><span class="small">{pct}% of team</span></span>
+                          : <span class="small muted">{p.fantasy < 0 ? "Cost the team points" : "No share (team total is zero or below)"}</span>}
+                      </summary>
+                      <div class="cmp-detail">
+                        <h4>Scoring breakdown</h4>
+                        <table class="formula">
+                          <thead><tr><th scope="col">Stat</th><th scope="col">Count x points = fantasy</th></tr></thead>
+                          <tbody>
+                            {bd.lines.map((l) => <tr class={l.subtotal < 0 ? "neg" : ""}><td>{l.label}</td><td class="num">[{fmt(l.count)} x {fmt(l.points)} = {fmt(l.subtotal)}]</td></tr>)}
+                            {bd.bonuses.map((x) => <tr><td>{x.label}</td><td class="num">{x.count} {x.count === 1 ? "game" : "games"}</td></tr>)}
+                            {bd.bonusPoints !== 0 && <tr><td>Bonus points (biggest bonus per game only)</td><td class="num">{signed(bd.bonusPoints)}</td></tr>}
+                          </tbody>
+                          <tfoot><tr><th>Total</th><td class="num">{fmt(round1(p.fantasy))}</td></tr></tfoot>
+                        </table>
+                        {!bd.ok && <p class="cmp-note" role="note">These lines add up to {fmt(bd.sum)}, not {fmt(round1(p.fantasy))}. The total is the official one; the breakdown is off for this player.</p>}
+                        {p.espn != null && Math.abs(p.espn - p.fantasy) >= 0.5 && <p class="muted small">ESPN scored these games {fmt(round1(p.espn))}.</p>}
+                      </div>
+                    </details>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      <details class="card cmp-help">
+        <summary>What do these words mean?</summary>
+        <dl class="settings">
+          <dt>Points scored</dt><dd>Real basketball points from the games.</dd>
+          <dt>Fantasy points</dt><dd>Points this league awards for every stat (good and bad) under its scoring rules. They decide the standings.</dd>
+          <dt>{STAT_LABEL.dd}</dt><dd>A game with 10 or more in two of: points, rebounds, assists, steals, blocked shots. A triple-double is three, a quadruple-double four. Only the biggest bonus counts in a game.</dd>
+          <dt>Share of team</dt><dd>His fantasy points as a percent of the team total for the same window. If a teammate lost points, shares can add up to more than 100%.</dd>
+          <dt>Started</dt><dd>The player was in a starting slot (not bench or IR) that day, so his points counted for the team.</dd>
+        </dl>
+      </details>
+    </>
+  )}
+
+  <script is:inline>
+    // No first team in the link yet: start with the team picked in "My team" on this device.
+    (function () {
+      const a = document.getElementById("cmp-a");
+      if (a && !a.value && window.BL && window.BL.viewTeam()) a.value = window.BL.viewTeam();
+    })();
+  </script>
+  <style>
+    .cmp-form { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; }
+    .cmp-form label { display: grid; gap: 4px; font-weight: 600; }
+    .cmp-win { display: flex; gap: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px 8px; }
+    .cmp-win label { display: flex; gap: 4px; align-items: center; font-weight: 400; }
+    .cmp-note { color: var(--bad); font-weight: 600; }
+    .cmp-score { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .cmp-team { display: grid; gap: 2px; padding: 10px; border: 2px solid var(--line); border-radius: 10px; }
+    .cmp-team.lead { border-color: var(--accent); }
+    .cmp-team.lead .cmp-name::after { content: " (leads)"; font-weight: 400; }
+    .cmp-name { font-weight: 700; }
+    .cmp-big { font: 800 36px/1 var(--display); }
+    .cmp-lead { font-size: 18px; }
+    .cmp-table { width: 100%; }
+    .cmp-table td.win { font-weight: 800; color: var(--ok); }
+    .cmp-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+    .cmp-players { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .cmp-players details { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+    .cmp-players summary { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; cursor: pointer; }
+    .cmp-players summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .cmp-fp { font: 800 20px/1 var(--display); text-align: right; }
+    .cmp-fp.neg { color: var(--bad); }
+    .cmp-three { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+    .cmp-share { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+    .cmp-bar { display: block; height: 8px; min-width: 2px; border-radius: 4px; background: var(--accent); }
+    .cmp-detail { margin-top: 8px; display: grid; gap: 6px; }
+    @media (max-width: 560px) { .cmp-score { grid-template-columns: 1fr; } .cmp-big { font-size: 28px; } }
+  </style>
+</Base>

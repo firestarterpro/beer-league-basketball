@@ -44,6 +44,7 @@ export const TOP_BAR: BarLink[] = [
   ["ESPN Standings", ESPN.standings, "🏆"],
   ["Injury Report ESPN", INJURY_REPORT, "🩹"],
   ["Beer League Stat", "/stats", "📊", "site"],
+  ["Compare teams", "/compare", "⚖️", "site"],
   ["Rules/Approvals", "/rules", "📜", "site"],
   ["ESPN Activity", ESPN.activity, "🔔"],
   ["ESPN Daily Leaders", ESPN.leaders, "🔥"],
