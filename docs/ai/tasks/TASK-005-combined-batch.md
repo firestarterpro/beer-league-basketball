@@ -37,9 +37,8 @@ and report. Nothing gets committed, pushed, migrated or deployed by the worker.
   7. ESPN Activity (was "Recent activity")
   8. ESPN Daily Leaders
   9. Fantasy Cast
-  Plus KEEP: Home, My team, League home, Draft, Dashboards, Trades.
-  Position of the KEEP links within the bar: not specified; put them after the 9 and report what you did.
-- Home button is hidden on the Home page (`/`) only; shown everywhere else.
+  Then (Jason 00:45): 10. My team, 11. Trades, 12. League home, 13. Home (Home is NOT shown on `/`, only on other pages).
+  **Remove the Draft and Dashboards buttons** from the bar (the pages themselves stay; just no bar link).
 - Rename "Rosters & trades" to **"Trades"** everywhere (espn.ts, index.astro, team/[abv].astro, any other hit).
 
 ### B. Home: Upcoming games with Lineups merged in (`src/pages/index.astro`, `public/schedule.js`, `public/team.js`, `site.css`)
@@ -59,8 +58,8 @@ and report. Nothing gets committed, pushed, migrated or deployed by the worker.
   `src/lib/` and report it.
 
 ### C. Rules/Approvals merge (`src/pages/rules.astro`, `src/pages/approvals.astro`)
-- One page holding both the rules and the Approvals & Requests content. **Ask Jason before choosing the URL
-  or deleting `/approvals`** (see open question 1 in the thread; use his answer if it's in this packet).
+- One page at `/rules` holding both the rules and the Approvals & Requests content.
+- **Delete `/approvals`** (Jason 00:45; no redirect, same as `/tiers`). Update any links that pointed to it.
 
 ### D. Player page (`src/pages/player/[id].astro`, `site.css`)
 - "How he scores": attempts sit next to makes (FGM | FGA, FTM | FTA, 3PM | 3PA) instead of negatives grouped at the
@@ -95,7 +94,8 @@ docs 1-7 (Claude handles those), deploy.
 - If you can: `npm run dev` and look at Home, a player page, a team page, /rules at desktop and phone width.
 
 ## Done when (observable)
-- One merged bar on every page in the order above; no ESPN shortcut row; Home button absent on `/` only.
+- One merged bar on every page in the order above; no ESPN shortcut row; Home button absent on `/` only;
+  no Draft or Dashboards button; `/approvals` returns 404 and its content is on `/rules`.
 - Home has no Lineups section; Upcoming games shows the picked team's tile rows per the rules in B.
 - Player page layout per D with 9-row Points standings.
 - No user-facing text says tier caps are enforced or shows a Violation stamp; tiers still display.
