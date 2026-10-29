@@ -32,6 +32,8 @@ $Pre = '^\s*((cd|Set-Location|Push-Location)\s+[^;&|]+\s*(;|&&)\s*)?'
 $Post = '(\s+2>&1)?(\s*\|\s*(Select-Object|Out-String)[^;&|]*)?\s*$'
 # A whole command that is exactly one of these runs without asking
 $Allow = $Pre + '(npm(\.cmd)?\s+run\s+build|git\s+(status|diff|log))(\s[^;&|]*?)?' + $Post
+# agy's portrait post-processing scripts, only from its own brain\<conversation>\scratch folder (TASK-003b)
+$AllowPortraitNode = '^\s*(&\s*)?node(\.exe)?\s+["'']?C:[\\/]Users[\\/]kcorn[\\/]\.gemini[\\/]antigravity-cli[\\/]brain[\\/][0-9a-fA-F-]+[\\/]scratch[\\/]process_(one|portraits)\.mjs["'']?(\s[^;&|]*)?' + $Post
 # -Strict: the only shell commands allowed (TASK-002 needs: sync venv Python on model scripts, the dry-run
 # publish and the offline runner test; plus read-only git and file listing)
 $Py = '(&\s*)?["'']?[^"'';&|]*\.venv[\\/]Scripts[\\/]python(\.exe)?["'']?\s+'
@@ -62,8 +64,12 @@ if ($hit) {
 elseif ($Strict -and $isShell -and $cmd -notmatch $StrictAllow) {
     $decision = "deny"; $reason = "Blocked by beer-league worker guard: only the task's Python checks, read-only git and file listing may run."
 }
-elseif ($isShell -and ($cmd -match $Allow -or ($Strict -and $cmd -match $StrictAllow))) {
+elseif ($isShell -and ($cmd -match $Allow -or $cmd -match $AllowPortraitNode -or ($Strict -and $cmd -match $StrictAllow))) {
     $decision = "allow"; $reason = "Local check allowed by beer-league worker guard."
+}
+elseif ($isShell -and $env:BEER_LEAGUE_DASHBOARD -ne "1") {
+    # The old way (Jason 2026-10-28, dashboard not working): any other command is refused at once
+    $decision = "deny"; $reason = "Blocked by beer-league worker guard: command is not on the allow list."
 }
 else {
     $decision = "ask"; $reason = ""
@@ -76,7 +82,8 @@ $decidedPath = Join-Path $approvalDir "decided.json"
 $lockPath = Join-Path $approvalDir "pending.lock"
 $ownsApprovalLock = $false
 
-if ($isShell -and ($decision -in @("ask", "deny"))) {
+# The approval dashboard is opt-in: set $env:BEER_LEAGUE_DASHBOARD = "1" to route refused commands there
+if ($isShell -and ($decision -in @("ask", "deny")) -and $env:BEER_LEAGUE_DASHBOARD -eq "1") {
     try {
         New-Item -ItemType Directory -Force -Path $approvalDir | Out-Null
         if (Test-Path -LiteralPath $lockPath -PathType Leaf) {
@@ -152,9 +159,16 @@ if ($isShell -and ($decision -in @("ask", "deny"))) {
     }
 }
 
-# Audit trail next to the worker logs
-Add-Content -Path (Join-Path $PSScriptRoot "..\docs\ai\logs\worker-guard.log") -Encoding utf8 `
-    -Value ("{0:s} {1}{2} {3}: {4}" -f (Get-Date), $decision, $(if ($Strict) { " (strict)" }), $name, ($text -replace "`n", " | "))
+# Audit trail in the shared Templar Archives log (read by the AI Control Center dashboard).
+# TEMPLAR_GUARD_LOG overrides the path; [agent=...] tells the dashboard which worker acted.
+$guardLog = if ($env:TEMPLAR_GUARD_LOG) { $env:TEMPLAR_GUARD_LOG } else { "C:\Templar Archives\logs\worker-guard.log" }
+$agent = if ($copilot) { "copilot" } else { "agy" }
+try {
+    New-Item -ItemType Directory -Force -Path (Split-Path $guardLog) | Out-Null
+    Add-Content -Path $guardLog -Encoding utf8 `
+        -Value ("{0:s} {1}{2} [agent={3}] {4}: {5}" -f (Get-Date), $decision, $(if ($Strict) { " (strict)" }), $agent, $name, ($text -replace "`n", " | "))
+}
+catch { [Console]::Error.WriteLine("Could not write the guard log: $($_.Exception.Message)") }
 
 if ($copilot) {
     # Empty output = Copilot's normal permission flow
