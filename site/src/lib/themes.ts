@@ -34,7 +34,7 @@ export const THEMES: Theme[] = [
 // Pages not listed (the LM desk, sign-in, pet desk) use Classic.
 export const PAGE_THEME: [path: string, theme: string][] = [
   ["/", "miami"], ["/stats", "skate"], ["/draft", "bookfair"], ["/rules", "scoreboard"],
-  ["/approvals", "commish"], ["/dashboards", "xp"], ["/player/", "pokedex"], ["/team/", "cartoon"],
+  ["/dashboards", "xp"], ["/player/", "pokedex"], ["/team/", "cartoon"],
 ];
 
 export function themeFor(path: string): string {

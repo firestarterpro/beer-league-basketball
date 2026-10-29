@@ -17,7 +17,7 @@ const [notes, open, board, settings, [counts], info, waivers, cards] = await Pro
          ORDER BY n.created_at DESC LIMIT 25`),
   query(`SELECT id, question, context_type FROM polls WHERE poll_is_open(id) ORDER BY created_at DESC`),
   query(`SELECT t.team_id, t.team_name, lower(t.abv) AS abv, t.gm_name, s.rank, s.total_points::float AS points,
-                b.badge, coalesce(b.t1_count, 0) AS t1, coalesce(b.t2_count, 0) AS t2, coalesce(b.t3_count, 0) AS t3
+                coalesce(b.t1_count, 0) AS t1, coalesce(b.t2_count, 0) AS t2, coalesce(b.t3_count, 0) AS t3
          FROM teams t LEFT JOIN standings s USING (team_id) LEFT JOIN team_badges b USING (team_id)
          WHERE t.active ORDER BY s.rank NULLS LAST, t.team_name`),
   query(`SELECT setting_key, setting_value FROM league_settings`),
@@ -37,7 +37,6 @@ const [notes, open, board, settings, [counts], info, waivers, cards] = await Pro
   cardRows(),
 ]);
 const cardOf = Object.fromEntries(cards.map((c) => [c.team_id, c]));
-const BADGE: Record<string, string> = { Legal: "/img/ui/badge-legal.webp", "Power Play": "/img/ui/badge-powerplay.webp" };
 // League (Central) time: the Worker itself runs on UTC.
 const fmt = (d: string) => new Date(d).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Chicago" }) + " CT";
 const openPolls = open.filter((p) => p.context_type === "generic" || p.context_type === "scrub_nominee");
@@ -54,35 +53,22 @@ const scoringName = MODEL_NAME[S.scoring_model] ?? S.scoring_model ?? "the chose
 <Base title="Home" active="/" sides fonts="family=VT323&family=Silkscreen:wght@400;700">
 <div class="home-grid">
 <div class="home-main">
-  {/* Lineups lock at each day's first tip-off and ESPN opens on today, so this jumps straight to tomorrow (team.js sets the team and day). */}
-  <section class="card collapsible lineup-card" id="lineup">
-    <h2>Lineups</h2>
-    <div class="lineup-btns">
-      <a class="espn-btn lineup-btn" data-espn="lineup" href={ESPN.lineup()} target="_blank" rel="noopener"><span aria-hidden="true">📋</span>Set tomorrow's lineup · {dayLabel(1)} ↗</a>
-      <a class="espn-btn" href={ESPN.rosters} target="_blank" rel="noopener"><span aria-hidden="true">🔁</span>Rosters & trades ↗</a>
-    </div>
-    <p class="muted small">Lineups lock at each day's first tip-off, and ESPN opens on today. This button goes straight to tomorrow for the team you picked at the top.</p>
-  </section>
   <section class="card collapsible" id="alerts" hidden
            data-links={JSON.stringify({ team: ESPN.team(), players: ESPN.players, lineup: ESPN.lineup() })}>
     <h2>Heads up</h2>
     <ul class="alerts" id="alerts-list"></ul>
   </section>
-  <section class="card collapsible" id="upcoming">
-    <h2>Upcoming games</h2>
-    <p class="muted small" id="upcoming-sub">Pick your team at the top to see its games.</p>
-    <div class="tv">
-      <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Game days"></div>
-      <div class="tv-set">
-        <div class="tv-screen">
-          <p class="tv-label" aria-hidden="true"><span>Upcoming games</span><span class="rec">● REC</span></p>
-          <div id="upcoming-days" class="stack"></div>
-        </div>
-        <span class="tv-knobs" aria-hidden="true"></span>
-      </div>
+  {/* Upcoming games with the Lineups section merged in (schedule.js). Lineups lock at each day's first tip-off. */}
+  <section class="card collapsible" id="upcoming" data-links={JSON.stringify({ lineup: ESPN.lineup(), trades: ESPN.rosters })}>
+    <div class="sec-head">
+      <h2>Upcoming games</h2>
+      <button type="button" class="link" id="upcoming-all">All teams</button>
     </div>
+    <p class="muted small" id="upcoming-sub">Pick your team at the top to see its games.</p>
+    <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Game days"></div>
+    <div id="upcoming-days"></div>
     <RuleSnippet title="Lineups" href="/rules#roster" icon="⏰" cta="Roster rules">
-      Set your lineup before each day's first game: it locks at that tip-off. {Number(S.ir_slots) || 2} IR spots, no bench.
+      Set your lineup before each day's first game: it locks at that tip-off. 2 PG, 2 SG, 2 SF, 2 PF, 2 C, 3 UTIL/bench and {Number(S.ir_slots) || 2} IR.
     </RuleSnippet>
   </section>
   <PetWall />
@@ -98,11 +84,9 @@ const scoringName = MODEL_NAME[S.scoring_model] ?? S.scoring_model ?? "the chose
             {cardOf[t.team_id]
               ? <TeamCard card={cardOf[t.team_id]} season={S.season} href={`/team/${t.abv}`} lazy />
               : <a class="muted" style="padding:12px" href={`/team/${t.abv}`}>{t.team_name}</a>}
-            {t.badge && BADGE[t.badge] && <img class="badge" src={BADGE[t.badge]} alt={t.badge} width="350" height="120">}
-            {t.badge === "Violation" && <span class="stamp">Violation</span>}
           </div>
           <p class="tcard-foot small">
-            <span>{t.gm_name ? `GM ${t.gm_name} · ` : ""}🤾 {t.t1} · ⛹️ {t.t2} · 🚶 {t.t3}{t.badge === "Violation" ? " · Over the caps" : ""}</span>
+            <span>{t.gm_name ? `GM ${t.gm_name} · ` : ""}🤾 {t.t1} · ⛹️ {t.t2} · 🚶 {t.t3}</span>
             <button type="button" class="link dl-card" data-card-dl={t.abv}>⬇ Download card</button>
           </p>
         </div>
@@ -111,7 +95,7 @@ const scoringName = MODEL_NAME[S.scoring_model] ?? S.scoring_model ?? "the chose
     <div class="snippets">
       <RuleSnippet title="Tiers & caps" href="/rules#tiers" icon={TIER_EMOJI.T1} cta="Tier rules">
         Players are ranked {TIER_EMOJI.T1} 1–{info.t1}, {TIER_EMOJI.T2} {info.t1 + 1}–{info.t2}, {TIER_EMOJI.T3} the rest.
-        A team can hold at most {info.cap1} of each capped tier. Ranked by {tierSource}.
+        Guideline: up to {info.cap1} of each top tier (noted, not enforced). Ranked by {tierSource}.
       </RuleSnippet>
       <RuleSnippet title="Scoring" href="/rules#scoring" icon="📊" cta="Scoring details">
         Season-long points, no head-to-head and no playoffs. The league voted for {scoringName} scoring.
@@ -124,7 +108,7 @@ const scoringName = MODEL_NAME[S.scoring_model] ?? S.scoring_model ?? "the chose
       {/* The VHS shelf (#7): drag a tape to the right (or tap it) to check it out. */}
       <div class="vhs-shelf">
         {openVotes.length > 0 && (
-          <a class="vhs" href="/approvals#approvals" draggable="false">
+          <a class="vhs" href="/rules#approvals" draggable="false">
             <img src="/img/fx/vhs-approvals.webp" alt="" width="300" height="499" draggable="false">
             <span class="vhs-sticker num">{openVotes.length} open</span>
             <span class="sr-only">{openVotes.length} approval {openVotes.length === 1 ? "vote" : "votes"} open</span>
@@ -138,11 +122,11 @@ const scoringName = MODEL_NAME[S.scoring_model] ?? S.scoring_model ?? "the chose
         )}
       </div>
       {openVotes.length > 0 && <p class="small muted vhs-hint">Drag a tape to the right, or tap it, to check it out.</p>}
-      {openVotes.length > 0 && <p><a href="/approvals#approvals">{openVotes.length} approval {openVotes.length === 1 ? "vote" : "votes"}</a>: {openVotes.map((p) => p.question).join(" · ")}</p>}
+      {openVotes.length > 0 && <p><a href="/rules#approvals">{openVotes.length} approval {openVotes.length === 1 ? "vote" : "votes"}</a>: {openVotes.map((p) => p.question).join(" · ")}</p>}
       {openPolls.length > 0 && <p><a href="#active-poll">{openPolls.length} {openPolls.length === 1 ? "poll" : "polls"}</a> open in the side column: {openPolls.map((p) => p.question).join(" · ")}</p>}
       <RuleSnippet title="How votes work" href="/rules#league" icon="🗳️" cta="Voting & moves">
-        A free-agent add or IR return that breaks the tier caps goes to a community vote. It passes with {counts.votes} yes
-        {counts.votes === 1 ? " vote" : " votes"} (more than half of the {counts.managed} managed teams).
+        League votes pass with {counts.votes} yes
+        {counts.votes === 1 ? " vote" : " votes"} (more than half of the {counts.managed} managed teams). Voting is voluntary.
       </RuleSnippet>
     </section>
     <section class="card collapsible" id="dash-card">

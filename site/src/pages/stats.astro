@@ -35,7 +35,7 @@ const data = { rows, model, heatName: HEAT_NAME, emoji: TIER_EMOJI, tierName: TI
   <p class="small muted">
     {TIER_EMOJI.T1} Tier 1 = ranks 1–{info.t1} (max {info.cap1} per team) · {TIER_EMOJI.T2} Tier 2 = ranks {info.t1 + 1}–{info.t2} (max {info.cap2}) · {TIER_EMOJI.T3} Tier 3 = the rest.{" "}
     {snap
-      ? <>Tier snapshot v{snap.version} from {TIER_SOURCE_NAME[snap.source] ?? snap.source}, in effect since {fmtDate(snap.effective_date)}, refreshes every {info.weeks} weeks. IR doesn't count toward the caps. Tap a player for his card.</>
+      ? <>Tier snapshot v{snap.version} from {TIER_SOURCE_NAME[snap.source] ?? snap.source}, in effect since {fmtDate(snap.effective_date)}, refreshes every {info.weeks} weeks. Tier caps are noted, not enforced. Tap a player for his card.</>
       : <>The tier list shows up once the LM freezes the first tier snapshot.</>}
   </p>
   <details class="explain-wrap">

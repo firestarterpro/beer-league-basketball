@@ -1,6 +1,6 @@
 ---
 // Player card: tier, owner, stats for an ESPN window, the scoring formula with his numbers,
-// his total, and the points standings 2 above and 2 below him. ?model= and ?split= switch views.
+// his total, and the points standings 4 above and 4 below him. ?model= and ?split= switch views.
 import Base from "../../layouts/Base.astro";
 import { query } from "../../lib/db";
 import { ESPN } from "../../lib/espn";
@@ -20,7 +20,7 @@ const [p, weights, around] = await Promise.all([
   playerRow(id, split),
   query<{ stat: string; points: number }>(
     `SELECT stat, points::float AS points FROM scoring_models WHERE model_key = $1 ORDER BY points DESC, stat`, [model]),
-  pointsNeighbours(id, split, model),
+  pointsNeighbours(id, split, model, 4),
 ]);
 if (!p) return new Response("Player not found", { status: 404 });
 
@@ -51,9 +51,21 @@ const moveText = (now: number, before?: number | null) =>
   before == null ? "new this run" : before === now ? "no change" : before > now ? `+${before - now} from #${before}` : `-${now - before} from #${before}`;
 const tierMove = p.prev_tier && p.prev_tier !== tier ? (p.prev_tier > tier ? "Moved up a tier" : "Dropped a tier") : null;
 const q = (m: string, s: string) => `?model=${m}&split=${s}`;
+// "How he scores" (Jason 2026-10-28): attempts/misses sit next to makes on one row, each as [count x pts = pts].
+const PAIR: Record<string, string> = { fga: "fgm", fgmi: "fgm", fta: "ftm", ftmi: "ftm", tpa: "tpm", tpmi: "tpm" };
+const SHORT: Record<string, string> = { fgm: "FGM", fga: "FGA", fgmi: "FG missed", ftm: "FTM", fta: "FTA", ftmi: "FT missed", tpm: "3PM", tpa: "3PA", tpmi: "3PMI" };
+const scoreRows: { label: string; parts: typeof lines; subtotal: number }[] = [];
+for (const l of lines) {
+  const partner = PAIR[l.stat] && scoreRows.find((r) => r.parts[0].stat === PAIR[l.stat]);
+  if (partner) { partner.parts.push(l); partner.label += ` | ${SHORT[l.stat] ?? l.label}`; partner.subtotal += l.subtotal; continue; }
+  scoreRows.push({ label: SHORT[l.stat] ?? l.label, parts: [l], subtotal: l.subtotal });
+}
+const calc = (l: (typeof lines)[number]) => `[${fmt(l.count)} x ${fmt(l.points)} = ${fmt(l.subtotal)}]`;
 ---
 <Base title={p.name} active="/stats">
   <p class="small"><a href="/stats">← Back to Stats</a></p>
+  <div class="pl-layout">
+  <div class="pl-left">
 
   {/* Compact top (Jason 2026-10-26): photo, name, tier and the numbers in a few short rows, so the sections below show without scrolling. */}
   <article class={`pcard pcard-compact pcard-${tier.toLowerCase()}`}>
@@ -121,35 +133,12 @@ const q = (m: string, s: string) => `?model=${m}&split=${s}`;
     {gp === 0 && <p class="muted small">No games in this window yet.</p>}
   </article>
 
-  <div class="grid">
-    <section class="card">
-      <h2>How he scores</h2>
-      {lines.length === 0 && <p class="muted">No stats in this window yet, so there's nothing to add up.</p>}
-      {lines.length > 0 && (
-        <table class="formula">
-          <thead><tr><th>Stat</th><th class="num">Count</th><th class="num">× Pts</th><th class="num">= Pts</th></tr></thead>
-          <tbody>
-            {lines.map((l) => (
-              <tr class={l.subtotal < 0 ? "neg" : ""}>
-                <td>{l.label}{["dd", "td", "qd"].includes(l.stat) && <span class="muted small"> games</span>}</td>
-                <td class="num">{fmt(l.count)}</td><td class="num">{sign(l.points)}</td><td class="num">{sign(l.subtotal)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot><tr><th colspan="3">Total</th><th class="num">{fmt(total)}</th></tr></tfoot>
-        </table>
-      )}
-      <p class="muted small">Bonuses don't stack: a triple-double game pays the triple-double bonus only.{" "}
-        {model === league && p.espn != null && split !== "projected" && <> ESPN's own total for this window is {fmt(p.espn)}.</>}{" "}
-        <a href="/rules">Scoring rules</a></p>
-    </section>
-
     <section class="card">
       <h2>Points standings</h2>
       {!me && <p class="muted">He has no games in this window yet, so he isn't in the points standings.</p>}
       {me && (
         <>
-          <p class="muted small">{MODEL_NAME[model]} points, {SPLIT_NAME[split].toLowerCase()}, all players. The two just above and below him.</p>
+          <p class="muted small">{MODEL_NAME[model]} points, {SPLIT_NAME[split].toLowerCase()}, all players. The four just above and below him.</p>
           <ol class="neighbours">
             {around.map((r) => {
               const gap = Math.round((r.points - me.points) * 10) / 10;
@@ -188,5 +177,31 @@ const q = (m: string, s: string) => `?model=${m}&split=${s}`;
         </>
       )}
     </section>
+  </div>
+  <div class="pl-right">
+    <section class="card">
+      <h2>How he scores</h2>
+      {lines.length === 0 && <p class="muted">No stats in this window yet, so there's nothing to add up.</p>}
+      {lines.length > 0 && (
+        <table class="formula">
+          <thead><tr><th>Stat</th><th>Count x pts = fantasy</th><th class="num">Pts</th></tr></thead>
+          <tbody>
+            {scoreRows.map((r) => (
+              <tr class={r.subtotal < 0 ? "neg" : ""}>
+                <td>{r.label}{["dd", "td", "qd"].includes(r.parts[0].stat) && <span class="muted small"> games</span>}</td>
+                <td class="num calc">{r.parts.map(calc).join(" | ")}</td>
+                <td class="num">{sign(Math.round(r.subtotal * 10) / 10)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot><tr><th colspan="2">Total</th><th class="num">{fmt(total)}</th></tr></tfoot>
+        </table>
+      )}
+      <p class="muted small">Bonuses don't stack: a triple-double game pays the triple-double bonus only.{" "}
+        {model === league && p.espn != null && split !== "projected" && <> ESPN's own total for this window is {fmt(p.espn)}.</>}{" "}
+        <a href="/rules">Scoring rules</a></p>
+    </section>
+
+  </div>
   </div>
 </Base>

@@ -32,34 +32,25 @@ export const lineupPeriod = (offsetDays = 1) => Math.max(1, 7 + Math.round((cent
 export const dayLabel = (offsetDays = 1) =>
   centralDate(offsetDays).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 
-// "Fantasy Shortcuts": the link bar in the header and the link row at the bottom.
-// The third field: "team" = public/team.js points it at the picked team; "lineup" = that team's lineup for tomorrow.
-export const SHORTCUTS: [string, string, ("team" | "lineup")?][] = [
-  ["Set tomorrow's lineup", ESPN.lineup(), "lineup"], ["My team", ESPN.team(), "team"], ["Rosters & trades", ESPN.rosters], ["League home", ESPN.league], ["Add players", ESPN.players], ["FantasyCast", ESPN.fantasycast],
-  ["Standings", ESPN.standings], ["Recent activity", ESPN.activity], ["Daily leaders", ESPN.leaders],
-  ["Waiver order", ESPN.waivers], ["Draft room", ESPN.draft],
-];
+export const INJURY_REPORT = `${base}/playernews?leagueId=${LEAGUE_ID}`;
 
-export const ESPN_ICON: Record<string, string> = {
-  "Set tomorrow's lineup": "📋", "Rosters & trades": "🔁", "My team": "👕", "League home": "🏠", "Add players": "➕", FantasyCast: "📺", Standings: "🏆", "Recent activity": "🔔",
-  "Daily leaders": "🔥", "Waiver order": "⏳", "Draft room": "🎯",
-};
-
-// Which shortcuts each page shows (Jason 2026-10-26): Home has them all; every other page only the ones that fit it.
-// Longest matching path wins; a path ending in / covers every page under it.
-export const PAGE_SHORTCUTS: [path: string, labels: string[]][] = [
-  ["/stats", ["Set tomorrow's lineup", "Add players", "Rosters & trades", "Daily leaders"]],
-  ["/player/", ["Set tomorrow's lineup", "Add players", "Rosters & trades", "Daily leaders"]],
-  ["/team/", ["Set tomorrow's lineup", "My team", "Rosters & trades", "Standings"]],
-  ["/draft", ["Draft room", "Rosters & trades"]],
-  ["/rules", ["League home", "Standings", "Waiver order"]],
-  ["/approvals", ["Set tomorrow's lineup", "My team", "Add players", "Waiver order", "Recent activity"]],
-  ["/dashboards", ["Standings", "Recent activity", "FantasyCast", "Daily leaders"]],
-  ["/updates", ["Recent activity"]],
+// The one top bar on every page (Jason 2026-10-27/29): replaces the old site nav and the ESPN shortcut rows.
+// [label, href, icon, kind?]. kind "team" / "lineup" = public/team.js points it at the picked team;
+// "site" = a page on this site (opens in the same tab). Home is left off on the Home page itself.
+export type BarLink = [label: string, href: string, icon: string, kind?: "team" | "lineup" | "site"];
+export const TOP_BAR: BarLink[] = [
+  ["Edit Lineup", ESPN.lineup(), "📋", "lineup"],
+  ["Free Agents", ESPN.players, "➕"],
+  ["ESPN Standings", ESPN.standings, "🏆"],
+  ["Injury Report ESPN", INJURY_REPORT, "🩹"],
+  ["Beer League Stat", "/stats", "📊", "site"],
+  ["Rules/Approvals", "/rules", "📜", "site"],
+  ["ESPN Activity", ESPN.activity, "🔔"],
+  ["ESPN Daily Leaders", ESPN.leaders, "🔥"],
+  ["Fantasy Cast", ESPN.fantasycast, "📺"],
+  ["My team", ESPN.team(), "👕", "team"],
+  ["Trades", ESPN.rosters, "🔁"],
+  ["League home", ESPN.league, "🏀"],
+  ["Home", "/", "🏠", "site"],
 ];
-export function shortcutsFor(path: string) {
-  const clean = path.length > 1 ? path.replace(/\/+$/, "") : path;
-  if (clean === "/") return SHORTCUTS;
-  const hit = PAGE_SHORTCUTS.filter(([p]) => (p.endsWith("/") ? clean.startsWith(p) : clean === p)).sort((a, b) => b[0].length - a[0].length)[0];
-  return hit ? SHORTCUTS.filter(([label]) => hit[1].includes(label)) : [];
-}
+export const topBarFor = (path: string) => (path === "/" ? TOP_BAR.filter(([label]) => label !== "Home") : TOP_BAR);

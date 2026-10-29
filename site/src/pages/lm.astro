@@ -2,22 +2,14 @@
 // League Manager desk. Unlisted page, no login (family league).
 import Base from "../layouts/Base.astro";
 import { query } from "../lib/db";
-import { TIER_EMOJI } from "../lib/tiers";
 import PetRequests from "../components/PetRequests.astro";
 
-const [queue, votes, polls, changes, teams, irPlayers, notes] = await Promise.all([
+const [queue, polls, changes, teams, notes] = await Promise.all([
   query(`SELECT r.id, r.action_type, r.payload, r.submitted_at, t.team_name,
                 (SELECT name FROM players WHERE player_id = r.payload->>'player_id') AS player_name,
                 (SELECT name FROM players WHERE player_id = r.payload->>'drop_player_id') AS drop_name
          FROM action_requests r JOIN teams t USING (team_id)
          WHERE r.status = 'pending' ORDER BY r.submitted_at`),
-  query(`SELECT p.id AS poll_id, p.question, p.context_type, p.context_id, poll_is_open(p.id) AS open,
-                v.yes_votes, v.threshold, coalesce(c.status, i.status) AS status
-         FROM polls p JOIN claim_vote_tally v ON v.poll_id = p.id
-         LEFT JOIN restricted_fa_claims c ON c.id = p.context_id
-         LEFT JOIN ir_activations i ON i.id = p.context_id
-         WHERE coalesce(c.status, i.status) IN ('pending', 'failed', 'approved') AND p.created_at > now() - interval '30 days'
-         ORDER BY p.created_at DESC`),
   query(`SELECT id, question, type, (SELECT count(*) FROM poll_responses r WHERE r.poll_id = p.id)::int AS ballots
          FROM polls p WHERE context_type IN ('generic', 'scrub_nominee') AND poll_is_open(id) ORDER BY created_at DESC`),
   query(`SELECT n.id, n.body, n.tags, n.created_at FROM notes n
@@ -27,7 +19,6 @@ const [queue, votes, polls, changes, teams, irPlayers, notes] = await Promise.al
                            AND (SELECT x FROM unnest(n.tags) x WHERE x LIKE 'device:%') = ANY(a.tags))
          ORDER BY n.created_at DESC`),
   query(`SELECT team_id, team_name, abv, gm_name, manager_assigned, uses_web_actions FROM teams WHERE active ORDER BY team_name`),
-  query(`SELECT r.team_id, r.player_id, r.player_name, r.tier FROM roster_tiers r WHERE r.slot = 'IR' ORDER BY r.player_name`),
   query(`SELECT id, body, created_at FROM notes WHERE visible ORDER BY created_at DESC LIMIT 15`),
 ]);
 // League (Central) time: the Worker itself runs on UTC.
@@ -64,48 +55,7 @@ const describe = (r: any) => {
 
   <PetRequests />
 
-  <section class="card">
-    <h2>Approval votes</h2>
-    {votes.length === 0 && <p class="muted">No recent claims or IR activations.</p>}
-    {votes.map((v) => (
-      <div class="stack" style="border-top:1px solid var(--line);padding-top:10px">
-        <p><strong>{v.question}</strong> <span class="num">{v.yes_votes}/{v.threshold} Yes</span> · {v.status}</p>
-        <div class="row">
-          {v.open && <button data-op="close_poll" data-poll_id={v.poll_id}>Close vote (after ESPN processes)</button>}
-        </div>
-        <form class="row" data-op="override">
-          <input type="hidden" name="context_type" value={v.context_type} />
-          <input type="hidden" name="context_id" value={v.context_id} />
-          <input name="reason" placeholder="Override reason" aria-label="Override reason" required />
-          <button type="submit" name="approve" value="true">Override: approve</button>
-          <button type="submit" name="approve" value="false">Override: deny</button>
-        </form>
-      </div>
-    ))}
-  </section>
-
   <div class="grid">
-    <form class="card stack" data-op="create_claim">
-      <h2>Enter a restricted-FA claim</h2>
-      <p class="small muted">From ESPN chat. Opens a Yes/No vote; the requester gets an automatic Yes.</p>
-      <select name="team_id" aria-label="Team">{teams.map((t) => <option value={t.team_id}>{t.team_name}</option>)}</select>
-      <input name="player_name" list="lm-players" data-player="player_id" placeholder="Player" autocomplete="off" aria-label="Player" />
-      <input type="hidden" name="player_id" />
-      <button class="primary" type="submit">Open vote</button>
-    </form>
-
-    <form class="card stack" data-op="create_ir">
-      <h2>Enter an IR activation</h2>
-      <p class="small muted">Within caps = social confirmation. Over caps = majority vote.</p>
-      <select name="player_id" aria-label="Player on IR" data-team-from="team_id">
-        {irPlayers.length === 0 && <option value="">Nobody is on IR</option>}
-        {irPlayers.map((p) => <option value={p.player_id} data-team={p.team_id}>{p.player_name} ({TIER_EMOJI[p.tier]})</option>)}
-      </select>
-      <input type="hidden" name="team_id" value={irPlayers[0]?.team_id ?? ""} />
-      <input type="hidden" name="to_slot" value="active" />
-      <button class="primary" type="submit">Post activation</button>
-    </form>
-
     <form class="card stack" data-op="create_poll">
       <h2>New poll</h2>
       <input name="question" placeholder="Question" required aria-label="Question" />
