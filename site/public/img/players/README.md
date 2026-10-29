@@ -41,3 +41,7 @@ Using Node.js and `sharp` (available in `site/node_modules`):
 2. Flood-fill from all 4 canvas edges through near-white background pixels (`min(R,G,B) >= 230` and `max(R,G,B) - min(R,G,B) <= 25`), setting `alpha = 0` (also clear any enclosed pure-white arm-torso background pocket if present).
 3. Run 2 passes along the transparent boundary to strip 1–2 px JPEG anti-alias gray halos (`min(R,G,B) >= 180` and `max - min <= 35` adjacent to transparent pixels) so the bold black pixel outline sits cleanly over both light and dark UI themes.
 4. Resize to `512x512` (`kernel: "lanczos3"`) and encode as WebP (`.webp({ quality: 90, alphaQuality: 100 })`), verifying dimensions (`512x512`), 4-channel RGBA transparency, and file size (`< 80 KB`).
+
+## Changelog
+
+- **Regenerated 2026-10-28:** Regenerated the 13 fallback portraits (`203999`, `1628983`, `1628389`, `1627750`, `1631105`, `1641708`, `1626164`, `2544`, `1628973`, `1629638`, `1627759`, `1628369`, `1630166`) directly with the image model and `sharp` post-processing pipeline so all 25 portraits form a uniform model-generated set.

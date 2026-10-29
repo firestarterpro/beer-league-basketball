@@ -62,14 +62,10 @@ const scoringName = MODEL_NAME[S.scoring_model] ?? S.scoring_model ?? "the chose
   <section class="card collapsible" id="upcoming" data-links={JSON.stringify({ lineup: ESPN.lineup(), trades: ESPN.rosters })}>
     <div class="sec-head">
       <h2>Upcoming games</h2>
+      <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Game days"></div>
       <button type="button" class="link" id="upcoming-all">All teams</button>
     </div>
-    <p class="muted small" id="upcoming-sub">Pick your team at the top to see its games.</p>
-    <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Game days"></div>
     <div id="upcoming-days"></div>
-    <RuleSnippet title="Lineups" href="/rules#roster" icon="⏰" cta="Roster rules">
-      Set your lineup before each day's first game: it locks at that tip-off. 2 PG, 2 SG, 2 SF, 2 PF, 2 C, 3 UTIL/bench and {Number(S.ir_slots) || 2} IR.
-    </RuleSnippet>
   </section>
   <PetWall />
   <section class="card collapsible" id="league">

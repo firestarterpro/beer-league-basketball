@@ -168,6 +168,8 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 .pt .who { position: sticky; left: 0; z-index: 1; min-width: 210px; max-width: 260px; text-align: left; font-weight: 400; }
 .pt thead .who { z-index: 3; }
 .pt .face { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; object-position: 50% 12%; background: rgb(127 127 127 / .15); }
+/* Cartoon portrait icon: zoom the full-body sprite so the circle shows the head (any icon size) */
+span.face.portrait { display: block; background-size: 260%; background-position: 50% 4%; background-repeat: no-repeat; }
 .pt .who a { display: grid; grid-template-columns: 30px 30px 30px minmax(0, 1fr); gap: 6px; align-items: center; color: inherit; text-decoration: none; }
 .pt .who .nm { display: grid; white-space: normal; line-height: 1.2; }
 .pt .who .pill { justify-self: start; font-size: 11px; padding: 3px 6px; }
@@ -315,12 +317,11 @@ iframe.looker { width: 100%; height: max(480px, calc(100dvh - 190px)); border: 1
 .spotlight .sp-name { margin: 6px 0 0; font: 800 24px/1.1 var(--display); text-transform: uppercase; }
 .spotlight .sp-name a { color: var(--ink); text-decoration: none; }
 .sp-links { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-/* Team mascots: all 7 in two rows (4 + 3). */
-@media (max-width: 640px) {   /* phones: smaller mascots */
-  #gp-wall .gp-mascot { --gp-size: 56px; padding: 8px 4px; gap: 4px; border-radius: 10px; }
-  #gp-wall .gp-mascot .gp-stage { width: 56px; height: 56px; }
-  #gp-wall .gp-mascot b { font-size: 11px; overflow-wrap: anywhere; }
-  #gp-wall .gp-mascot small { font-size: 10px; }
+/* Team mascots: all 7 in one row. */
+@media (max-width: 640px) {   /* phones: smaller mascots fit in one row at 375px */
+  #gp-wall { gap: 4px; }
+  #gp-wall .gp-mascot { --gp-size: 56px; padding: 0; gap: 3px; }
+  #gp-wall .gp-mascot .gp-stage { width: min(100%, 56px); height: auto; aspect-ratio: 1; }
 }
 /* Home: big ESPN buttons at the top of the left column. */
 .espn-btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
@@ -367,12 +368,15 @@ button.link { background: none; border: 0; padding: 4px; color: var(--accent); t
 .cl-btn:hover, .cl-btn:focus-visible { color: var(--ink); border-color: var(--accent); }
 .card.collapsed { gap: 0; }
 .card.collapsed > :not(.cl-head):not(.cl-btn) { display: none !important; }
-/* Masco-Pets: the 7 mascots plus the "How pets work" card in the 8th spot. */
-.gp-wall-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+/* Masco-Pets: the 7 mascots side by side in one row, plus the "How pets work" card in the 8th spot. */
+.gp-wall-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(180px, 1.4fr); gap: 8px; align-items: center; }
 .gp-wall-grid > #gp-wall { display: contents; }
 .gp-key { display: grid; gap: 6px; align-content: center; padding: 12px; border: 1px dashed var(--line); border-radius: 14px; color: var(--muted); line-height: 1.35; }
 .gp-key b { color: var(--ink); font-family: var(--display); text-transform: uppercase; letter-spacing: .03em; }
-@media (max-width: 640px) { .gp-wall-grid { gap: 6px; } .gp-key { font-size: 12px; padding: 8px; } }
+@media (max-width: 900px) {
+  .gp-wall-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .gp-key { grid-column: 1 / -1; font-size: 12px; padding: 8px; margin-top: 4px; }
+}
 /* Side column poll (only while a poll is open). */
 .active-poll .poll { padding: 12px; }
 /* ---------- Stats page: one section, plain rows (no glow), advanced settings ---------- */
@@ -436,30 +440,40 @@ dialog.pick-team::backdrop { background: rgb(0 0 0 / .6); }
 .inj-line .inj-what { color: var(--bad); }
 
 /* Home: Upcoming games (Lineups merged in, schedule.js). One row of player tiles per team per day. */
-#upcoming .tv-tabs { display: flex; gap: 6px; padding: 0; margin: 0; }
+#upcoming .sec-head { align-items: center; justify-content: flex-start; gap: 8px 12px; }
+#upcoming .tv-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; }
+#upcoming-all { margin-left: auto; }
 #upcoming .day-tab { min-width: 0; height: auto; padding: 5px 12px; border: 2px solid var(--accent); border-radius: 999px;
   background: transparent; color: var(--ink); font: 700 13px/1 var(--display); text-transform: uppercase; letter-spacing: .04em; }
 #upcoming .day-tab[aria-selected="true"] { background: transparent; color: var(--accent); text-decoration: underline 3px; text-underline-offset: 4px; }
-.lu-day { font-size: 14px; margin: 6px 0 4px; }
+.lu-day { font-size: 14px; margin: 2px 0 4px; }
 .lu-team + .lu-team { margin-top: 8px; }
 .lu-team-name { margin: 0 0 2px; color: var(--muted); font-weight: 600; }
-.lu-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
-.lu-tile { flex: none; width: 56px; display: grid; justify-items: center; gap: 1px; text-decoration: none; color: var(--ink); border-radius: 8px; padding: 3px 2px;
+.lu-row { --lu-pic: 96px; display: flex; flex-wrap: wrap; gap: 6px; }
+.lu-tile { flex: none; width: calc(var(--lu-pic) + 8px); display: grid; justify-items: center; gap: 2px; text-decoration: none; color: var(--ink); border-radius: 8px; padding: 4px 2px;
   border: 1px solid var(--line); background: var(--surface); }
 .lu-tile.bench { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); border-color: var(--accent); }
 .lu-tile.off { opacity: .5; }
 .lu-tile.hurt .lu-pic img { filter: grayscale(.6); }
-.lu-pic { position: relative; width: 48px; height: 48px; border-radius: 50%; overflow: hidden; background: var(--line); display: grid; place-items: center; }
+.lu-pic { position: relative; width: var(--lu-pic); height: var(--lu-pic); border-radius: 50%; overflow: hidden; background: var(--line); display: grid; place-items: center; }
 .lu-pic img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
-.lu-init { font: 700 18px/1 var(--display); color: var(--muted); }
-.lu-icon { font-size: 26px; }
+.lu-init { font: 700 22px/1 var(--display); color: var(--muted); }
+.lu-icon { font-size: 30px; }
 .lu-avg { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font: 700 11px/1.3 var(--body); background: rgb(0 0 0 / .65); color: #fff; }
-.lu-ir { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; background: rgb(0 0 0 / .35); }
-.lu-hurt { position: absolute; top: 0; right: 2px; font-size: 15px; }
+.lu-ir { position: absolute; inset: 0; display: grid; place-items: center; font-size: 34px; background: rgb(0 0 0 / .35); }
+.lu-hurt { position: absolute; top: 2px; right: 4px; font-size: 16px; }
 .lu-slot { font: 700 10px/1 var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
-.lu-name { font-size: 11px; line-height: 1.1; max-width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lu-name { font-size: 12px; line-height: 1.1; max-width: calc(var(--lu-pic) + 4px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lu-tool { border-style: dashed; }
 .lu-tool .lu-pic { background: transparent; }
+@media (max-width: 640px) {
+  .lu-row { --lu-pic: 56px; gap: 4px; }
+  .lu-init { font-size: 18px; }
+  .lu-icon { font-size: 26px; }
+  .lu-ir { font-size: 30px; }
+  .lu-hurt { top: 0; right: 2px; font-size: 15px; }
+  .lu-name { font-size: 11px; }
+}
 /* Player page (Jason 2026-10-28): condensed card + Points standings + Power rankings on the left, How he scores on the right. */
 .pl-layout { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 16px; align-items: start; }
 .pl-left, .pl-right { display: grid; gap: 16px; min-width: 0; }

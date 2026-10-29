@@ -14,16 +14,15 @@
     const power = egg ? 0 : Math.round(Number(r.power) || 0), fire = !egg && live(r.fire_until), sup = !egg && (power >= max || live(r.super_until));
     const dunk = (C.meters && C.meters.power && C.meters.power.icon) || "🤾";
     const status = egg ? "🥚 Not hatched yet" : fire && sup ? "🦸 Superman fire mode!" : sup ? "🌟 Super Saiyan" : fire ? "🔥 On Fire" : `${dunk} ${power} / ${max}`;
-    // Average 🏀 per week since the pet first hatched (younger than a week counts as one week).
-    const born = Number(r.born_at) || now, pw = Math.round((Number(r.points) || 0) / Math.max(1, (now - born) / 6.048e8));
+    const mode = fire && sup ? "🔥🌟" : sup ? "🌟" : fire ? "🔥" : "";
+    const sprite = egg
+      ? `<span class="gp-egg-wall" aria-hidden="true">🥚</span>`
+      : `<span class="gp-sprite"><span class="gp-aura"></span><span class="gp-flames"><i></i><i></i><i></i><i></i></span>
+          <img alt="${esc(r.team_name)} masco-pet" src="/pet/sprites/${esc(r.abv)}-anim.webp" onerror="if(this.src.endsWith('-anim.webp'))this.src='/pet/sprites/${esc(r.abv)}.png';else this.parentNode.classList.add('gp-noart')"></span>`;
     return `<div class="gp-mascot gp-visitable${fire ? " gp-fire" : ""}${sup ? " gp-super" : ""}" role="button" tabindex="0" data-visit="${esc(r.abv)}"
-      aria-label="Visit ${esc(r.team_name)}'s masco-pet">
-      <span class="gp-stage"><span class="gp-sprite" data-anim="idle"><span class="gp-aura"></span><span class="gp-flames"><i></i><i></i><i></i><i></i></span>
-        <img alt="${esc(r.team_name)} masco-pet" src="/pet/sprites/${esc(r.abv)}.png" onerror="this.parentNode.classList.add('gp-noart')"></span></span>
-      <b>${esc(r.team_name)}</b>
-      <span class="gp-bar" aria-hidden="true"><i style="width:${Math.min(100, Math.round((power / max) * 100))}%"></i></span>
-      <small>${status}</small>
-      ${pw > 0 ? `<span class="gp-pw" title="Average 🏀 points per week">[${pw}🏀/w]</span>` : ""}</div>`;
+      title="${esc(r.team_name)} · ${status}" aria-label="Visit ${esc(r.team_name)}'s masco-pet (${status})">
+      <span class="gp-stage">${sprite}${mode ? `<span class="gp-mode" aria-hidden="true">${mode}</span>` : ""}</span>
+      <span class="gp-bar" aria-hidden="true"><i style="width:${Math.min(100, Math.round((power / max) * 100))}%"></i></span></div>`;
   }).join("");
   card.hidden = false;
   // Tap a mascot to visit it (practice mode, see pet.js).

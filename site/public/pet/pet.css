@@ -205,15 +205,20 @@
 @keyframes gp-superman { from { box-shadow: 0 0 0 3px #ffd84a, 0 0 14px 2px rgb(127 212 255 / .6); } to { box-shadow: 0 0 0 3px #fff, 0 0 26px 8px rgb(255 140 0 / .7); } }
 .gp-sprite[data-anim="cheer"] img { animation: gp-jump .4s ease-out 3; }
 
-/* Mascot wall (home page) */
-.gp-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+/* Mascot wall (home page): all pets side by side in one row, no individual card around each pet */
+.gp-wall { display: flex; flex-wrap: nowrap; align-items: flex-end; justify-content: space-between; gap: 8px; }
 .gp-wall[hidden] { display: none; }
-.gp-mascot { display: grid; justify-items: center; gap: 6px; padding: 12px 8px; border-radius: 14px; background: var(--bg, #f3f4f1); border: 1px solid var(--line, #d9ddd6); text-align: center; --gp-size: 96px; }
-.gp-mascot .gp-stage { width: 96px; height: 96px; position: relative; }
-.gp-mascot b { font: 800 16px/1.1 var(--display, sans-serif); text-transform: uppercase; }
-.gp-mascot .gp-bar { width: 100%; }
-.gp-mascot small { color: var(--muted, #5d6670); font-size: 12px; }
-.gp-mascot .gp-sprite[data-anim="idle"] img { animation: gp-bob 1.8s ease-in-out infinite; }
+.gp-mascot { flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 4px; padding: 0; background: none; border: 0; border-radius: 0; text-align: center; --gp-size: 96px; }
+.gp-mascot .gp-stage { width: min(100%, var(--gp-size)); aspect-ratio: 1; height: auto; position: relative; display: grid; place-items: center; }
+.gp-mascot .gp-egg-wall { font-size: calc(var(--gp-size, 64px) * .55); line-height: 1; animation: gp-wobble 1.4s ease-in-out infinite; }
+.gp-mascot .gp-mode { position: absolute; top: -4px; right: -2px; z-index: 3; font-size: 14px; line-height: 1; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .45)); pointer-events: none; }
+.gp-mascot .gp-bar { width: min(100%, 72px); height: 6px; border-radius: 3px; }
+.gp-mascot .gp-bar i { background: linear-gradient(90deg, #f2b632, #d23a2c); }
+@media (max-width: 640px) {
+  .gp-mascot { --gp-size: 56px; gap: 3px; }
+  .gp-mascot .gp-mode { font-size: 11px; top: -2px; right: -2px; }
+  .gp-mascot .gp-bar { height: 5px; }
+}
 
 @media (max-width: 520px) { .gp-answers { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) {

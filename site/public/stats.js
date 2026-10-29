@@ -46,10 +46,11 @@
   const face = (r) => {
     if (!r.photo || !r.nba_id) return `<span class="face" aria-hidden="true"></span>`;
     const id = Number(r.nba_id);
-    const isPortrait = (data.portraitIds ?? []).includes(id);
-    const src = isPortrait ? `/img/players/portrait-${id}.webp`
-      : `https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png`;
-    return `<img class="face" src="${src}" alt="" width="30" height="30" loading="lazy"${isPortrait ? "" : ` onerror="this.style.visibility='hidden'"`}>`;
+    // Portraits are full-body sprites, so they are drawn as a zoomed background that shows just the head
+    // (site.css .face.portrait); headshots stay plain images.
+    if ((data.portraitIds ?? []).includes(id))
+      return `<span class="face portrait" style="background-image:url('/img/players/portrait-${id}.webp')" aria-hidden="true"></span>`;
+    return `<img class="face" src="https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png" alt="" width="30" height="30" loading="lazy" onerror="this.style.visibility='hidden'">`;
   };
   const mpg = (r) => (r.gp && n(r.t.min) != null ? n(r.t.min) / r.gp : null);
   // Places moved since the last run of the "Rank by" list (positive = up). null = no earlier list.

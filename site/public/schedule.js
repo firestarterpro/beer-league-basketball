@@ -4,7 +4,6 @@
 // lineup tile (that team's ESPN lineup for that day) and a Trades tile. Shows the picked team; "All teams" expands.
 document.addEventListener("DOMContentLoaded", () => {
   const sec = document.getElementById("upcoming");
-  const sub = document.getElementById("upcoming-sub");
   const box = document.getElementById("upcoming-days");
   const tabs = document.getElementById("tv-tabs");
   const allBtn = document.getElementById("upcoming-all");
@@ -28,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const bench = s === "BE" || s === "UTIL";
     const cls = ["lu-tile", bench && "bench", p.hurt && "hurt", s === "IR" && "ir", !playing && "off"].filter(Boolean).join(" ");
     const pic = p.img
-      ? `<img src="${esc(p.img)}" alt="" loading="lazy" width="64" height="64">`
+      ? `<img src="${esc(p.img)}" alt="" loading="lazy" width="96" height="96">`
       : `<span class="lu-init" aria-hidden="true">${esc(p.name.split(" ").map((w) => w[0]).join("").slice(0, 2))}</span>`;
     const note = s === "IR" ? "On IR" : p.hurt ? `Injured${p.injury_note ? ": " + p.injury_note : ""}` : playing ? "Plays" : "No game";
     return `<a class="${cls}" href="/player/${encodeURIComponent(p.id)}" title="${esc(p.name)} · ${esc(s)} · ${esc(note)}">
@@ -77,8 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const q = showAll ? "all" : team;
     if (allBtn) { allBtn.textContent = showAll ? "Just my team" : "All teams"; allBtn.hidden = !team && showAll; }
     box.innerHTML = ""; data = null;
-    if (!q) { sub.textContent = "Pick your team at the top, or see all teams."; return; }
-    sub.textContent = `${showAll ? "All teams" : window.BL.teamName(team)} · next ${DAYS} days · times Central`;
+    if (!q) { box.innerHTML = '<p class="muted small">Pick your team at the top, or see all teams.</p>'; return; }
     try {
       const res = await fetch(`/api/lineup?team=${encodeURIComponent(q)}&days=${DAYS}`).then((r) => r.json());
       if (!res.ok) throw new Error(res.error);
