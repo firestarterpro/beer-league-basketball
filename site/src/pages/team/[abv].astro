@@ -41,9 +41,8 @@ const art = TEAM_ART[team.abv];
 const extra = (kind: string) => (art === "flag" || art === "stat" ? `/img/teams/${kind}-${art}.webp` : null);
 const jacket = extra("jacket"), yearbook = extra("yearbook");
 const PATCH = { T1: "/img/ui/tier-t1.webp", T2: "/img/ui/tier-t2.webp", T3: "/img/ui/tier-t3.webp" };
-const BADGE: Record<string, string> = { Legal: "/img/ui/badge-legal.webp", "Power Play": "/img/ui/badge-powerplay.webp" };
 const SIGNS = ["Have a great summer!", "Never change!", "K.I.T. (keep in touch)!", "2 good 2 be 4gotten!", "Stay cool!", "See you at the draft!",
-  "You're the MVP of homeroom!", "Don't let the tier caps get you down!", "Ballin' 4ever!", "Remember the 2-day waivers!"];
+  "You're the MVP of homeroom!", "Chase that tier-1 glow!", "Ballin' 4ever!", "Remember the 2-day waivers!"];
 const sign = (i: number) => SIGNS[i % SIGNS.length];
 // "OUT · Left foot (fracture) · Back ~Nov 20" for a hurt player, else null.
 const hurtLine = (p: (typeof roster)[number]) => {
@@ -60,16 +59,14 @@ const hurtLine = (p: (typeof roster)[number]) => {
       <h1>{team.team_name}</h1>
       <p class="muted">{abvLabel(team.abv)}{team.gm_name ? ` · GM ${team.gm_name}` : ""}{team.rank ? ` · #${team.rank} in the standings` : ""}{team.points != null ? ` · ${Math.round(team.points)} pts` : ""}</p>
       <p class="lh-tiers">{TIER_EMOJI.T1} {team.t1} · {TIER_EMOJI.T2} {team.t2} · {TIER_EMOJI.T3} {team.t3}
-        {team.badge && BADGE[team.badge] && <img src={BADGE[team.badge]} alt={team.badge} width="175" height="60">}
-        {team.badge === "Violation" && <span class="stamp">Violation</span>}
       </p>
     </div>
     <div class="lh-links">
       <a class="rs-btn" href={`/stats?team=${team.team_id}`}>Team roster in Stats →</a>
       {/* data-team keeps this team's number when team.js re-points lineup links each day. */}
-      <a class="espn-btn lineup-btn" data-espn="lineup" data-team={team.espn_team_id ?? undefined} href={ESPN.lineup(team.espn_team_id)} target="_blank" rel="noopener">📋 Set tomorrow's lineup · {dayLabel(1)} ↗</a>
+      <a class="espn-btn lineup-btn" data-espn="lineup" data-team={team.espn_team_id ?? undefined} href={ESPN.lineup(team.espn_team_id)} target="_blank" rel="noopener">📋 Edit Lineup · {dayLabel(1)} ↗</a>
       <a class="espn-btn" href={ESPN.team(team.espn_team_id)} target="_blank" rel="noopener">Team on ESPN ↗</a>
-      <a class="espn-btn" href={ESPN.rosters} target="_blank" rel="noopener">🔁 Rosters & trades ↗</a>
+      <a class="espn-btn" href={ESPN.rosters} target="_blank" rel="noopener">🔁 Trades ↗</a>
     </div>
   </section>
 

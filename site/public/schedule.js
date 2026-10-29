@@ -1,134 +1,107 @@
-// Home page "Upcoming games" as a TV guide on a CRT (#5): one day per channel tab, swipe or tap the
-// tabs to surf days. Each player row is a channel; tap it for the NBA versions of the heat ranks.
-// W = Weekly power: tap the chip to flip it to HP bars (#6). M = Minutes power: a battery.
-// Ranks are the fantasy versions; the NBA versions show when a row opens.
+// Home page "Upcoming games" (Lineups merged in): per day, one row of player tiles in slot order
+// (PG, SG, SF, PF, C, UTIL/bench, IR) with each player's average fantasy points. Bench is highlighted,
+// injured players are marked and IR players get a ♿ over the photo. After the last player: a Change
+// lineup tile (that team's ESPN lineup for that day) and a Trades tile. Shows the picked team; "All teams" expands.
 document.addEventListener("DOMContentLoaded", () => {
+  const sec = document.getElementById("upcoming");
   const sub = document.getElementById("upcoming-sub");
   const box = document.getElementById("upcoming-days");
   const tabs = document.getElementById("tv-tabs");
-  const screen = document.querySelector("#upcoming .tv-screen");
-  if (!box) return;
-  // The TV sits in a wide or a narrow column depending on the screen; narrow TVs stack each channel.
-  const tv = document.querySelector("#upcoming .tv");
-  if (tv && window.ResizeObserver) {
-    new ResizeObserver(([e]) => {
-      tv.classList.toggle("narrow", e.contentRect.width <= 520);
-      tv.classList.toggle("tiny", e.contentRect.width <= 430);
-    }).observe(tv);
-  }
+  const allBtn = document.getElementById("upcoming-all");
+  if (!box || !sec) return;
+  const links = JSON.parse(sec.dataset.links || "{}");
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const sfx = (n) => window.BL.sfx && window.BL.sfx(n);
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
-  const tomorrow = new Date(Date.now() + 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
-  const dayTab = (d) => (d === today ? "Tonight" : d === tomorrow ? "Tomorrow"
-    : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" }));
-  const dayName = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
-  const rank = (n) => (n ? `#${n}` : "–");
-  const slotName = { active: "", bench: "Bench", IR: "IR" };
-  // 4 HP bars for the weekly rank, 3 battery cells for the minutes rank.
-  const hp = (n) => (!n ? 0 : n <= 25 ? 4 : n <= 50 ? 3 : n <= 100 ? 2 : n <= 200 ? 1 : 0);
-  const cells = (n) => (!n ? 0 : n <= 25 ? 3 : n <= 75 ? 2 : n <= 150 ? 1 : 0);
-  let days = [], at = 0;
+  const CT = { timeZone: "America/Chicago" };
+  const ymd = (offset) => new Date(Date.now() + offset * 864e5).toLocaleDateString("en-CA", CT);
+  const DAYS = 3;
+  const dates = [...Array(DAYS)].map((_, i) => ymd(i));
+  const dayTab = (i) => (i === 0 ? "Tonight" : i === 1 ? "Tomorrow"
+    : new Date(dates[i] + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" }));
+  const ORDER = ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL", "BE", "IR"];
+  const slotOf = (p) => (p.slot === "IR" ? "IR" : p.slot === "bench" ? "BE" : p.pos || "UTIL");
+  const sortKey = (p) => { const i = ORDER.indexOf(slotOf(p)); return i < 0 ? 99 : i; };
+  let data = null, at = 0, showAll = false;
 
-  function row(g, i) {
-    const live = g.status === "In Progress";
-    const time = g.status === "Final" ? "Final" : live ? "Live" : g.tip || "TBD";
-    const bars = hp(g.weekly_fantasy), batt = cells(g.minutes_fantasy);
-    return `
-      <div class="game channel${g.slot === "active" ? "" : " bench"}${live ? " live" : ""}" role="button" tabindex="0" aria-expanded="false">
-        <span class="ch num">CH ${String(i + 1).padStart(2, "0")}</span>
-        <span class="time">${esc(time)}${live ? ' <span class="rec-dot" aria-hidden="true"></span>' : ""}</span>
-        <span class="who">${esc(g.player_name)}</span>
-        <span class="chips">
-          <button type="button" class="hp-chip" aria-pressed="false" title="Weekly power (fantasy). Tap to flip.">
-            <span class="hp-front">W ${rank(g.weekly_fantasy)}</span>
-            <span class="hp-back" aria-hidden="true"><b>HP</b>${[1, 2, 3, 4].map((b) => `<i class="${b <= bars ? "on" : ""}"></i>`).join("")}</span>
-          </button>
-          <span class="batt-chip" title="Minutes power (fantasy)"><span class="batt lvl-${batt}" aria-hidden="true"><i></i><i></i><i></i></span>M ${rank(g.minutes_fantasy)}</span>
-        </span>
-        <span class="opp">${esc(g.nba_team)} ${esc(g.opponent)}</span>
-        <span class="opp slot">${esc(g.slot === "active" ? g.position_slot || "" : slotName[g.slot] ?? g.slot)}</span>
-        <span class="more">NBA version: Weekly ${rank(g.weekly_nba)} · Minutes ${rank(g.minutes_nba)} · ${bars} of 4 HP · battery ${batt} of 3</span>
-      </div>`;
-  }
+  const tile = (p, playing) => {
+    const s = slotOf(p);
+    const bench = s === "BE" || s === "UTIL";
+    const cls = ["lu-tile", bench && "bench", p.hurt && "hurt", s === "IR" && "ir", !playing && "off"].filter(Boolean).join(" ");
+    const pic = p.img
+      ? `<img src="${esc(p.img)}" alt="" loading="lazy" width="64" height="64">`
+      : `<span class="lu-init" aria-hidden="true">${esc(p.name.split(" ").map((w) => w[0]).join("").slice(0, 2))}</span>`;
+    const note = s === "IR" ? "On IR" : p.hurt ? `Injured${p.injury_note ? ": " + p.injury_note : ""}` : playing ? "Plays" : "No game";
+    return `<a class="${cls}" href="/player/${encodeURIComponent(p.id)}" title="${esc(p.name)} · ${esc(s)} · ${esc(note)}">
+        <span class="lu-pic">${pic}${s === "IR" ? '<span class="lu-ir" aria-label="On IR">♿</span>' : p.hurt ? '<span class="lu-hurt" aria-label="Injured">🩹</span>' : ""}
+          <span class="lu-avg num">${p.avg != null ? p.avg.toFixed(1) : "–"}</span></span>
+        <span class="lu-slot">${esc(s === "BE" ? "Bench" : s)}</span>
+        <span class="lu-name">${esc(p.name.split(" ").slice(-1)[0])}</span>
+      </a>`;
+  };
+  const tools = (team, i) => {
+    const u = new URL(links.lineup);
+    if (team.espn_team_id) u.searchParams.set("teamId", team.espn_team_id);
+    u.searchParams.set("scoringPeriodId", String(window.BL.period(i)));
+    return `<a class="lu-tile lu-tool" href="${esc(u)}" target="_blank" rel="noopener" title="Change lineup on ESPN">
+        <span class="lu-pic"><span class="lu-icon" aria-hidden="true">📋</span></span><span class="lu-slot">Change</span><span class="lu-name">lineup ↗</span></a>
+      <a class="lu-tile lu-tool" href="${esc(links.trades)}" target="_blank" rel="noopener" title="Trades on ESPN">
+        <span class="lu-pic"><span class="lu-icon" aria-hidden="true">🔁</span></span><span class="lu-slot">ESPN</span><span class="lu-name">Trades ↗</span></a>`;
+  };
 
-  function show(i, how) {
-    if (!days.length) return;
-    at = (i + days.length) % days.length;
-    const [d, games] = days[at];
-    const live = games.some((g) => g.status === "In Progress");
-    if (screen) screen.classList.toggle("on-air", live);
+  function show(i) {
+    if (!data) return;
+    at = (i + DAYS) % DAYS;
     tabs.querySelectorAll("[role=tab]").forEach((t, n) => { t.setAttribute("aria-selected", String(n === at)); t.tabIndex = n === at ? 0 : -1; });
-    box.innerHTML = `
-      <div class="games-day" role="tabpanel" aria-label="${esc(dayName(d))}">
-        <h3>${esc(dayName(d))}</h3>
-        ${games.map(row).join("")}
-        <p class="small tv-foot">${games.filter((g) => g.slot === "active").length} active, ${games.length} total${days.length > 1 ? " · swipe for the next day" : ""}</p>
-      </div>`;
-    if (how && screen && !(window.BL.calm && window.BL.calm())) {
-      screen.classList.remove("zap"); void screen.offsetWidth; screen.classList.add("zap");
-    }
+    const d = dates[at];
+    const today = data.games.filter((g) => g.d === d);
+    const playing = new Set(today.map((g) => g.id));
+    const teams = [];
+    data.roster.forEach((p) => {
+      let t = teams.find((x) => x.team_id === p.team_id);
+      if (!t) teams.push((t = { team_id: p.team_id, team_name: p.team_name, espn_team_id: p.espn_team_id, players: [] }));
+      t.players.push(p);
+    });
+    const first = today.find((g) => g.tip)?.tip;
+    box.innerHTML = `<div role="tabpanel" aria-label="${esc(dayTab(at))}">
+      <p class="lu-day"><b>${esc(dayTab(at))}</b>${first ? ` · first game ${esc(first)} CT` : today.length ? "" : " · no games"}</p>
+      ${teams.map((t) => `
+        <div class="lu-team">
+          ${teams.length > 1 ? `<p class="lu-team-name small">${esc(t.team_name)} · ${t.players.filter((p) => playing.has(p.id) && slotOf(p) !== "IR").length} playing</p>` : ""}
+          <div class="lu-row">${t.players.slice().sort((a, b) => sortKey(a) - sortKey(b)).map((p) => tile(p, playing.has(p.id))).join("")}${tools(t, at)}</div>
+        </div>`).join("")}
+    </div>`;
   }
 
-  async function load(team) {
-    box.innerHTML = ""; tabs.innerHTML = ""; days = [];
-    if (screen) screen.classList.remove("on-air");
-    if (!team) { sub.textContent = "Pick your team at the top to see its games."; box.innerHTML = '<p class="tv-empty">No signal. Pick your team at the top.</p>'; return; }
-    sub.textContent = `${window.BL.teamName(team)} · next 3 days · times Central`;
+  async function load() {
+    const team = window.BL.viewTeam();
+    const q = showAll ? "all" : team;
+    if (allBtn) { allBtn.textContent = showAll ? "Just my team" : "All teams"; allBtn.hidden = !team && showAll; }
+    box.innerHTML = ""; data = null;
+    if (!q) { sub.textContent = "Pick your team at the top, or see all teams."; return; }
+    sub.textContent = `${showAll ? "All teams" : window.BL.teamName(team)} · next ${DAYS} days · times Central`;
     try {
-      const res = await fetch(`/api/schedule?team=${encodeURIComponent(team)}&days=3`).then((r) => r.json());
+      const res = await fetch(`/api/lineup?team=${encodeURIComponent(q)}&days=${DAYS}`).then((r) => r.json());
       if (!res.ok) throw new Error(res.error);
-      const rows = res.data;
-      if (!rows.length) { box.innerHTML = '<p class="tv-empty">😴 No games for your players in the next 3 days.</p>'; return; }
-      const byDay = {};
-      rows.forEach((g) => (byDay[g.game_date.slice(0, 10)] ||= []).push(g));
-      days = Object.entries(byDay);
-      tabs.innerHTML = days.map(([d], n) => `<button type="button" role="tab" class="day-tab" aria-selected="${n === 0}" tabindex="${n === 0 ? 0 : -1}">${esc(dayTab(d))}</button>`).join("");
-      show(0);
+      data = res.data;
+      if (!data.roster.length) { box.innerHTML = '<p class="muted">No players on the roster yet.</p>'; return; }
+      show(at);
     } catch {
-      box.innerHTML = '<p class="tv-empty">Couldn\'t load the schedule. Try again in a minute.</p>';
+      box.innerHTML = '<p class="muted">Couldn\'t load the games. Try again in a minute.</p>';
     }
   }
 
-  // Day tabs: click, arrow keys, or swipe the screen.
+  tabs.innerHTML = dates.map((_, n) => `<button type="button" role="tab" class="day-tab" aria-selected="${n === 0}" tabindex="${n === 0 ? 0 : -1}">${esc(dayTab(n))}</button>`).join("");
   tabs.addEventListener("click", (e) => {
     const t = e.target.closest("[role=tab]");
-    if (!t) return;
-    sfx("channel-click"); show([...tabs.children].indexOf(t), "tab");
+    if (t) { sfx("channel-click"); show([...tabs.children].indexOf(t)); }
   });
   tabs.addEventListener("keydown", (e) => {
     const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
-    if (!step || !days.length) return;
-    e.preventDefault(); sfx("channel-click"); show(at + step, "key");
-    tabs.children[at].focus();
+    if (!step) return;
+    e.preventDefault(); show(at + step); tabs.children[at].focus();
   });
-  let x0 = null, y0 = 0;
-  box.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") { x0 = e.clientX; y0 = e.clientY; } });
-  box.addEventListener("pointerup", (e) => {
-    if (x0 === null) return;
-    const dx = e.clientX - x0, dy = e.clientY - y0;
-    x0 = null;
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && days.length > 1) { sfx("channel-click"); show(at + (dx < 0 ? 1 : -1), "swipe"); }
-  });
-  box.addEventListener("pointercancel", () => (x0 = null));
+  if (allBtn) allBtn.addEventListener("click", () => { showAll = !showAll; load(); });
 
-  // Rows open to show the NBA ranks; the W chip flips to HP bars.
-  box.addEventListener("click", (e) => {
-    const chip = e.target.closest(".hp-chip");
-    if (chip) {
-      const on = chip.getAttribute("aria-pressed") !== "true";
-      chip.setAttribute("aria-pressed", String(on)); sfx("card-flip");
-      return;
-    }
-    const ch = e.target.closest(".channel");
-    if (!ch) return;
-    const open = ch.getAttribute("aria-expanded") !== "true";
-    ch.setAttribute("aria-expanded", String(open)); sfx("channel-click");
-  });
-  box.addEventListener("keydown", (e) => {
-    if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("channel")) { e.preventDefault(); e.target.click(); }
-  });
-
-  load(window.BL.viewTeam());
-  document.addEventListener("bl:team", (e) => load(e.detail));
+  load();
+  document.addEventListener("bl:team", load);
 });

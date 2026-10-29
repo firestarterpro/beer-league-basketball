@@ -392,7 +392,7 @@
       BL.sfx("shelf-beep");
       if (!calm()) { nav.classList.remove("wobble"); void nav.offsetWidth; nav.classList.add("wobble"); }
     };
-    nav.querySelectorAll('a[href="/polls"], a[href="/approvals"], a[href="/actions"]').forEach((a) => {
+    nav.querySelectorAll('a[href="/rules"]').forEach((a) => {
       a.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") beep(); });
       a.addEventListener("touchstart", beep, { passive: true });
     });

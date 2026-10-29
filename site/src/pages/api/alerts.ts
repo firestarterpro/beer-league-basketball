@@ -2,7 +2,7 @@
 // today's before the day's first tip-off, tomorrow's after it (lineups lock at each day's first game).
 //   injured starters (smart about the 2-day waiver: due back soon = sit tight, longer = IR or a pickup),
 //   day-to-day starters, starters with no game while a bench player has one, healthy players still on IR,
-//   open roster spots, and tier-cap trouble.
+//   and open roster spots. Tier caps are only noted, never flagged here (Jason 2026-10-29).
 // Each alert: { level: "warn" | "info", text, link: "team" | "lineup" | "players" | null, day }.
 // The part of text inside [[ ]] becomes the link (alerts.js); day = 0 today / 1 tomorrow, for lineup links.
 import type { APIRoute } from "astro";
@@ -16,13 +16,13 @@ export const GET: APIRoute = ({ url }) =>
   handle(async () => {
     const team = url.searchParams.get("team") ?? "";
     if (!/^[0-9a-f-]{36}$/i.test(team)) return [];
-    const [roster, [badge], [settings], [day]] = await Promise.all([
+    const [roster, [settings], [day]] = await Promise.all([
       query(`SELECT p.name, upper(coalesce(p.status, 'ACTIVE')) AS status, p.injury_note, r.slot, nba_tricode(p.nba_team) AS nba,
                     to_jsonb(p) ->> 'injury_return_date' AS back
              FROM rosters r JOIN players p USING (player_id) WHERE r.team_id = $1 ORDER BY p.name`, [team]),
-      query(`SELECT badge FROM team_badges WHERE team_id = $1`, [team]),
       query(`SELECT array_length(string_to_array(max(setting_value) FILTER (WHERE setting_key = 'starter_slots'), ','), 1) AS starters,
                     coalesce(max(setting_value) FILTER (WHERE setting_key = 'ir_slots'), '2')::int AS ir_slots,
+                    coalesce(max(setting_value) FILTER (WHERE setting_key = 'bench_slots'), '0')::int AS bench,
                     coalesce(max(setting_value) FILTER (WHERE setting_key = 'waiver_period_days'), '${WAIVER_DAYS}')::int AS waiver_days
              FROM league_settings`),
       // Which day can still change: today until its first tip, then tomorrow. Plus which NBA teams play that day.
@@ -71,7 +71,7 @@ export const GET: APIRoute = ({ url }) =>
       } else if (p.slot !== "IR" && p.slot !== "bench" && p.status === "DAY_TO_DAY")
         add("info", `${p.name} is day-to-day${note(p)}. [[Check your lineup for ${when}]] before tip-off.`, "lineup");
       else if (p.slot === "IR" && healthy(p) && p.status !== "DAY_TO_DAY")
-        add("warn", `${p.name} is healthy but still on IR. [[Activate him in ESPN]]; if that puts you over the tier caps, it goes to a community vote.`, "lineup");
+        add("warn", `${p.name} is healthy but still on IR. [[Activate him in ESPN]].`, "lineup");
     }
     // Starters with no game that day, when a healthy bench player does have one.
     if (day?.has_schedule && playing.size && benchWithGame.length) {
@@ -79,10 +79,8 @@ export const GET: APIRoute = ({ url }) =>
       idle.slice(0, benchWithGame.length).forEach((p, i) =>
         add("info", `${p.name} has no game ${when}, but ${benchWithGame[i].name} on your bench does. [[Swap them for ${when}]].`, "lineup"));
     }
-    const open = Number(settings?.starters ?? 0) - roster.filter((p) => p.slot !== "IR").length;
+    const open = Number(settings?.starters ?? 0) + Number(settings?.bench ?? 0) - roster.filter((p) => p.slot !== "IR").length;
     if (open > 0)
       add("warn", `You have ${open} open roster ${open === 1 ? "spot" : "spots"}. [[Add a player in ESPN]].`, "players");
-    if (badge?.badge === "Violation")
-      add("warn", "Your roster is over the tier caps from a free-agent add. The LM will open a community vote.", null);
     return alerts;
   });

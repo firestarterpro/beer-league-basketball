@@ -7,7 +7,7 @@
 2. **Home Page Layout Rules:**
    - Sections must remain collapsible.
    - Upcoming games sits above the pets section, and the pet info card stays in the 8th slot.
-   - ESPN links must reflect the single filtered fix across all pages (not all 11 ESPN links).
+   - One merged top bar on every page (site pages + ESPN links, lib/espn.ts TOP_BAR; Jason 2026-10-29). Home button hidden on Home; no Draft or Dashboards buttons. Lineups section merged into Upcoming games.
 3. **Removed Legacy Pages:**
    - Old removed pages must stay deleted; do not recreate or re-link them.
 4. **Deployment Gate:**

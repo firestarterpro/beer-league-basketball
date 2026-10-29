@@ -1,5 +1,6 @@
 ---
-// League settings and rules, read from league_settings (the docs' values) and scoring_models.
+// League settings and rules, read from league_settings (the docs' values) and scoring_models,
+// plus Approvals & requests (merged in from the old /approvals page, Jason 2026-10-29).
 import Base from "../layouts/Base.astro";
 import { query } from "../lib/db";
 import { ESPN } from "../lib/espn";
@@ -31,8 +32,8 @@ const pts = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 
 const sections: [string, [string, string][]][] = [
   ["Roster", [
-    ["Roster spots", `${S.roster_size}: ${slots.join(", ")}${Number(S.ir_slots) ? `, plus ${S.ir_slots} IR` : ""}`],
-    ["Bench", Number(S.bench_slots) ? `${S.bench_slots}` : "None"],
+    ["Roster spots", `${S.roster_size}: ${slots.join(", ")}${Number(S.bench_slots) ? `, ${S.bench_slots} UTIL/bench` : ""}${Number(S.ir_slots) ? `, plus ${S.ir_slots} IR (up to ${Number(S.roster_size) + Number(S.ir_slots)} with injuries)` : ""}`],
+    ["UTIL / bench", Number(S.bench_slots) ? `${S.bench_slots}` : "None"],
     ["Centers", `At most ${S.center_max} per team`],
     ["Lineups lock", S.lineup_lock === "daily_first_game" ? "Each day at the first game's tip-off" : S.lineup_lock],
   ]],
@@ -49,7 +50,7 @@ const sections: [string, [string, string][]][] = [
       ? new Date(`${v}T12:00:00Z`).toLocaleDateString("en-US", { dateStyle: "long", timeZone: "UTC" }) : v))],
   ]],
   ["League", [
-    ["Teams", `${teamCount.active} now, room for up to ${info.maxTeams}. Everything (draft, caps, votes) scales with the team count.`],
+    ["Teams", `${teamCount.active} now, room for up to ${info.maxTeams}. Everything (draft, votes) scales with the team count.`],
     ["Community votes", `Pass with ${teamCount.votes} yes votes (more than half of the ${teamCount.managed} managed teams)`],
   ]],
   ["Season", [
@@ -59,9 +60,10 @@ const sections: [string, [string, string][]][] = [
   ]],
 ];
 ---
-<Base title="Rules" active="/rules">
+<Base title="Rules & approvals" active="/rules" fonts="family=Cabin+Sketch:wght@400;700">
   <section class="card">
     <h2>League rules</h2>
+    <p class="small"><a href="#roster">Roster</a> · <a href="#tiers">Tiers</a> · <a href="#scoring">Scoring</a> · <a href="#approvals">Approvals & requests</a></p>
     <p class="muted small">From the league's documents. ESPN runs the league, so if ESPN ever shows something different, ask the LM.{" "}
       <a href={ESPN.settings} target="_blank" rel="noopener">ESPN's settings page ↗</a></p>
   </section>
@@ -76,14 +78,12 @@ const sections: [string, [string, string][]][] = [
     <section class="card" id="tiers">
       <h2>Tiers</h2>
       <dl class="settings">
-        <dt>{TIER_EMOJI.T1} Tier 1</dt><dd>Ranks 1–{S.tier1_max_rank}, at most {S.tier1_cap} per team</dd>
-        <dt>{TIER_EMOJI.T2} Tier 2</dt><dd>Ranks {Number(S.tier1_max_rank) + 1}–{S.tier2_max_rank}, at most {S.tier2_cap} per team</dd>
+        <dt>{TIER_EMOJI.T1} Tier 1</dt><dd>Ranks 1–{S.tier1_max_rank}, guideline of {S.tier1_cap} per team</dd>
+        <dt>{TIER_EMOJI.T2} Tier 2</dt><dd>Ranks {Number(S.tier1_max_rank) + 1}–{S.tier2_max_rank}, guideline of {S.tier2_cap} per team</dd>
         <dt>{TIER_EMOJI.T3} Tier 3</dt><dd>Rank {Number(S.tier2_max_rank) + 1} and up, no limit</dd>
         <dt>Ranked by</dt><dd>{info.snapshot?.source === "espn" ? <>Now: {tierSource}. From the next refresh: {nextSource}.</> : tierSource}</dd>
         <dt>Refresh</dt><dd>Every {S.tier_refresh_weeks} weeks, as a new numbered snapshot</dd>
-        <dt>IR</dt><dd>Players on IR don't count toward the caps</dd>
-        <dt>⚡ Power Play</dt><dd>Over the caps from the draft, a trade or a tier refresh is legal, and it's a ⚡ Power Play.
-          Only free-agent adds and IR activations that break the caps need a community vote.</dd>
+        <dt>Caps</dt><dd>Noted on the site only, never enforced. No votes and no drops over tiers.</dd>
       </dl>
       <p class="small"><a href="/stats">See the stats table</a> · <a href="#how">How the rankings work</a></p>
     </section>
@@ -117,4 +117,83 @@ const sections: [string, [string, string][]][] = [
       <dl class="settings">{rules.map((r) => <><dt>{r.section}</dt><dd>{r.text}</dd></>)}</dl>
     </section>
   )}
+  <section class="card stack" id="approvals">
+  <h2 id="requests">Approvals & requests</h2>
+  <p class="muted">
+    For GMs who'd rather not use the ESPN app. Send a move here and the LM makes it in ESPN when they can.
+    It's a best-effort favor: send time-sensitive moves early, or make them in ESPN yourself. Requests can't be cancelled. Trades stay in ESPN chat.
+  </p>
+
+  <div class="card muted empty" id="pick-first" data-emoji="👆">Pick your team at the top of the page.</div>
+  <div class="card muted empty" id="not-opted" data-emoji="📵" hidden>Your team makes its moves in ESPN directly. Ask the LM if you'd like to send requests here.</div>
+
+  <form class="card stack" id="action-form" hidden>
+    <h2>New request</h2>
+    <label class="row">What do you need?
+      <select id="action-type">
+        <option value="add_player">Add a free agent</option>
+        <option value="drop_player">Drop a player</option>
+        <option value="waiver_claim">Waiver claim</option>
+        <option value="lineup_change">Lineup change</option>
+        <option value="ir_move">IR move</option>
+      </select>
+    </label>
+    <label class="row" data-for="add_player waiver_claim">Player to add
+      <input id="add-search" list="add-list" placeholder="Start typing a name" autocomplete="off">
+      <datalist id="add-list"></datalist>
+    </label>
+    {/* Card binder (#14): search results as trading cards; tap one to pick it. */}
+    <div class="binder" id="add-binder" data-for="add_player waiver_claim" aria-label="Matching players" hidden></div>
+    <label class="row" data-for="drop_player waiver_claim lineup_change ir_move">
+      <span id="roster-label">Player</span>
+      <select id="roster-player"></select>
+    </label>
+    {/* Chalkboard lineup (#15): drag a name (or tap a name, then a spot) to fill the date, slot and player. */}
+    <div class="chalkboard" id="chalkboard" data-for="lineup_change" hidden>
+      <p class="chalk-title">Starting lineup</p>
+      <div class="chalk-grid">
+        <div class="chalk-slots" id="chalk-slots" aria-label="Lineup spots"></div>
+        <ul class="chalk-roster" id="chalk-roster" aria-label="Your roster"></ul>
+      </div>
+      <p class="chalk-hint">Drag a name onto a spot, or tap a name and then a spot.</p>
+    </div>
+    <label class="row" data-for="lineup_change">Date <input type="date" id="lineup-date"></label>
+    <label class="row" data-for="lineup_change">Slot
+      <select id="lineup-slot"><option>PG</option><option>SG</option><option>SF</option><option>PF</option><option>C</option><option>UTIL</option><option>Bench</option></select>
+    </label>
+    <div class="row" data-for="ir_move">
+      <label class="row">Move to
+        <select id="ir-to"><option value="IR">IR</option><option value="active">Starting lineup</option></select>
+      </label>
+      {/* Skateboard (#16): ollies whenever the IR move changes. */}
+      <span class="ollie" aria-hidden="true"><img src="/img/toys/skateboard.webp" alt="" width="265" height="506"></span>
+    </div>
+    <div class="row"><button class="primary" type="submit">Send to LM</button></div>
+    {/* Helper (#17), opt-in: tap "Need help?" to turn it on; "Don't show again" hides it for good on this device. */}
+    <button type="button" class="helper-ask" id="helper-ask" hidden><img src="/img/fx/helper-bubble.webp" alt="Need help?" width="400" height="312"></button>
+    <div class="helper" id="helper" hidden>
+      <img class="helper-clip" src="/img/fx/helper.webp" alt="" width="397" height="560">
+      <div class="helper-say">
+        <p id="helper-text">Hi! I'm the Beer League helper. Pick what you need and I'll give you tips.</p>
+        <div class="row">
+          <button type="button" class="link" id="helper-ok">Thanks</button>
+          <button type="button" class="link" id="helper-never">Don't show again</button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <section class="card" id="history" hidden>
+    <h2>Your requests</h2>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Sent</th><th>Request</th><th>Status</th><th>LM note</th></tr></thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <script is:inline src="/actions.js"></script>
+  </section>
+  <script is:inline src="/actions.js"></script>
 </Base>

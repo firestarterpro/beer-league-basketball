@@ -1,7 +1,6 @@
 // Action request page: loads the picked team's roster and request history.
 // Toys: search results as a trading-card binder (#14), a chalkboard lineup you drag names onto (#15),
-// a skateboard that ollies on IR moves, with a "Whoa! Violation" if a move breaks the caps (#16),
-// and an opt-in helper with tier-cap tips (#17). The form fields underneath are unchanged.
+// a skateboard that ollies on IR moves (#16), and an opt-in helper with tips (#17). The form fields underneath are unchanged.
 document.addEventListener("DOMContentLoaded", function () {
   const $ = (id) => document.getElementById(id);
   const sfx = (n) => BL.sfx && BL.sfx(n);
@@ -107,30 +106,11 @@ document.addEventListener("DOMContentLoaded", function () {
     return (addPlayers.find((p) => p.name.toLowerCase() === name) || {}).player_id;
   }
 
-  // ---------- Caps check: add / waiver claim, and IR returns to the lineup ----------
-  let capSeq = 0;
-  async function checkCaps() {
-    const type = $("action-type").value;
-    const pid = ["add_player", "waiver_claim"].includes(type) ? addPlayerId()
-      : type === "ir_move" && $("ir-to").value === "active" ? $("roster-player").value : "";
-    const seq = ++capSeq;
-    if (!pid) { whoa(false); return; }
-    const res = await fetch(`/api/actions?team=${BL.viewTeam()}&check=${encodeURIComponent(pid)}`).then((r) => r.json()).catch(() => ({}));
-    if (seq === capSeq) whoa(!!(res.ok && res.data.over));
-  }
-  function whoa(on) {
-    const box = $("heads-up");
-    const was = !box.hidden;
-    box.hidden = !on;
-    if (on && !was) {
-      sfx("buzzer");
-      if (!calm()) { box.classList.remove("tracking"); void box.offsetWidth; box.classList.add("tracking"); }
-      helperSay("Whoa! That move would put you over the tier caps. The LM may send it to a community vote first.");
-    }
-  }
+  // Tier caps are noted, not enforced (Jason 2026-10-29), so there is no caps check before a request.
+  function checkCaps() {}
 
   // ---------- Chalkboard lineup (#15) ----------
-  const SPOTS = ["PG", "SG", "SF", "PF", "C", "UTIL", "UTIL", "UTIL"];
+  const SPOTS = ["PG", "PG", "SG", "SG", "SF", "SF", "PF", "PF", "C", "C", "UTIL", "UTIL", "UTIL"];
   let chalkPick = null;
   function chalkboard() {
     const slots = $("chalk-slots"), list = $("chalk-roster");
@@ -235,21 +215,21 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   function helperTip(p) {
     const type = $("action-type").value;
-    if (p && p.tier === "T1") return helperSay("It looks like you're trying to add a T1. A team can hold 3 T1s and 3 T2s; going over needs a community vote.");
-    if (p && p.tier === "T2") return helperSay("A T2! You can hold 3 T2s. I'll shout if this one goes over.");
-    if (p) return helperSay("T3 players never count against the caps. Add away!");
+    if (p && p.tier === "T1") return helperSay("A T1! The guideline is 3 T1s and 3 T2s per team. It's only noted, never enforced.");
+    if (p && p.tier === "T2") return helperSay("A T2! The guideline is 3 T2s per team, noted but not enforced.");
+    if (p) return helperSay("T3 players never count toward the tier guideline. Add away!");
     const tips = {
-      add_player: "Type a name and pick a card. I'll check the tier caps for you.",
+      add_player: "Type a name and pick a card.",
       drop_player: "Dropped players sit on waivers for 2 days before anyone can add them.",
       waiver_claim: "Waiver claims go by waiver order, which resets weekly. Pick who to add and who to drop.",
       lineup_change: "Lineups lock at each day's first tip-off. Drag a name onto a spot on the chalkboard.",
-      ir_move: "Bringing someone back from IR counts them against the caps again. I'll check it for you.",
+      ir_move: "Players on IR don't take a roster spot. Bring them back when they're healthy.",
     };
     if (helperMode() === "on" && !$("helper").hidden) $("helper-text").textContent = tips[type] || "";
   }
   $("helper-ask").addEventListener("click", () => {
     setHelper("on"); helperOffer();
-    helperSay("Hi! I'm the Beer League helper. Pick what you need and I'll point out the tier caps as you go.");
+    helperSay("Hi! I'm the Beer League helper. Pick what you need and I'll give you tips as you go.");
   });
   $("helper-ok").addEventListener("click", () => { $("helper").hidden = true; });
   $("helper-never").addEventListener("click", () => { setHelper("never"); helperOffer(); BL.toast("The helper won't show up again on this device."); });

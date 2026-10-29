@@ -1,7 +1,7 @@
 ---
 // Shared page frame: header, nav, team picker. Every page uses it.
 import { query } from "../lib/db";
-import { ESPN_ICON, shortcutsFor } from "../lib/espn";
+import { topBarFor } from "../lib/espn";
 import GigaPet from "../components/GigaPet.astro";
 import ActivePoll from "../components/ActivePoll.astro";
 import { openPolls } from "../lib/polls";
@@ -9,10 +9,11 @@ import { THEMES, themeFor, themeName } from "../lib/themes";
 
 // sides: the page lays out its own side columns (Home). Every other page gets a side column only while a poll is open.
 // fonts: extra Google Fonts a page's toys use (css2 query, e.g. "family=VT323").
-// The Fantasy Shortcuts bar shows every ESPN link on Home and only the page's own ones elsewhere (lib/espn.ts PAGE_SHORTCUTS).
+// One merged top bar (lib/espn.ts TOP_BAR) on every page; Sync, sound and the pet sit at its right end,
+// and the My team + Theme pickers sit under the games ticker.
 interface Props { title: string; active?: string; sides?: boolean; fonts?: string }
 const { title, active = "", sides = false, fonts: pageFonts = "" } = Astro.props;
-const shortcuts = shortcutsFor(Astro.url.pathname);
+const bar = topBarFor(Astro.url.pathname.length > 1 ? Astro.url.pathname.replace(/\/+$/, "") : Astro.url.pathname);
 // Every page has its own theme; a visitor's pick in the theme bar (bl.theme on their device) wins over it.
 const pageTheme = themeFor(Astro.url.pathname);
 const themeFonts = Object.fromEntries(THEMES.map((t) => [t.key, t.fonts]));
@@ -21,9 +22,6 @@ const [teams, polls] = await Promise.all([
     "SELECT team_id, team_name, espn_team_id FROM teams WHERE active ORDER BY team_name"),
   sides ? [] : openPolls(),
 ]);
-const nav = [
-  ["/", "Home"], ["/stats", "Stats"], ["/draft", "Draft"], ["/rules", "Rules"], ["/approvals", "Approvals & requests"], ["/dashboards", "Dashboards"],
-];
 ---
 <!doctype html>
 <html lang="en" data-theme={pageTheme}>
@@ -62,41 +60,38 @@ const nav = [
 <body>
   <header>
     <div class="wrap head">
-      <nav class="nav-btns" id="site-nav" aria-label="Site">
-        {nav.map(([href, label]) => <a href={href} aria-current={active === href ? "page" : undefined}>{label}</a>)}
+      <nav class="nav-btns top-bar" id="site-nav" aria-label="Site and ESPN links">
+        {bar.map(([label, href, icon, kind]) => kind === "site"
+          ? <a href={href} aria-current={active === href ? "page" : undefined}><span aria-hidden="true">{icon}</span> {label}</a>
+          : <a href={href} target="_blank" rel="noopener" data-espn={kind}><span aria-hidden="true">{icon}</span> {label} <span class="ext" aria-hidden="true">↗</span></a>)}
       </nav>
       <div class="head-tools">
-        <div class="head-pickers">
-          <label class="picker">
-            <span>My team</span>
-            <select id="team-picker">
-              <option value="">Pick your team</option>
-              {teams.map((t) => <option value={t.team_id} data-espn={t.espn_team_id ?? ""}>{t.team_name}</option>)}
-            </select>
-          </label>
-          {/* Each page has its own theme; a pick here wins on every page (saved on this device). */}
-          <label class="picker theme-pick">
-            <span>Theme</span>
-            <select id="theme-picker">
-              <option value="page">Page's own ({themeName(pageTheme)})</option>
-              {THEMES.map((t) => <option value={t.key}>{t.emoji} {t.name}</option>)}
-            </select>
-          </label>
-        </div>
         <div class="sync" id="sync" hidden>
-          <button type="button" id="sync-now">Sync</button>
+          <button type="button" id="sync-now" aria-label="Sync"><span class="sync-icon" aria-hidden="true">🔄</span><span class="sync-word"> Sync</span></button>
           <a id="sync-status" href="/updates" title="What syncs when">Updates</a>
         </div>
         <button type="button" class="sound-btn" id="sound-toggle" aria-pressed="true" aria-label="Sound effects">🔊</button>
         <GigaPet />
       </div>
     </div>
-    {/* Fantasy Shortcuts: ESPN links in the header bar. */}
-    {shortcuts.length > 0 && <nav class="wrap shortcut-bar" aria-label="Fantasy Shortcuts">
-      <b>ESPN ↗</b>
-      {shortcuts.map(([label, href, kind]) => <a href={href} target="_blank" rel="noopener" data-espn={kind}>{ESPN_ICON[label] ?? "🏀"} {label}</a>)}
-    </nav>}
     <div class="ticker" id="ticker" hidden aria-label="NBA scores: today and last night"></div>
+    <div class="wrap head-pickers">
+      <label class="picker">
+        <span>My team</span>
+        <select id="team-picker">
+          <option value="">Pick your team</option>
+          {teams.map((t) => <option value={t.team_id} data-espn={t.espn_team_id ?? ""}>{t.team_name}</option>)}
+        </select>
+      </label>
+      {/* Each page has its own theme; a pick here wins on every page (saved on this device). */}
+      <label class="picker theme-pick">
+        <span>Theme</span>
+        <select id="theme-picker">
+          <option value="page">Page's own ({themeName(pageTheme)})</option>
+          {THEMES.map((t) => <option value={t.key}>{t.emoji} {t.name}</option>)}
+        </select>
+      </label>
+    </div>
   </header>
   <main class="wrap">
     {sides || polls.length === 0
@@ -107,10 +102,6 @@ const nav = [
         </div>}
   </main>
   <footer class="wrap muted small">
-    {shortcuts.length > 0 && <nav class="espn-links" aria-label="Fantasy Shortcuts">
-      <b>Fantasy Shortcuts ↗</b>
-      {shortcuts.map(([label, href, kind]) => <a href={href} target="_blank" rel="noopener" data-espn={kind}>{label}</a>)}
-    </nav>}
     <p>ESPN runs the league. This site is for tiers, votes and fun. Votes are voluntary.</p>
     <p class="row"><button type="button" class="link" id="slime-toggle" hidden>Gutter slime: on</button></p>
   </footer>
